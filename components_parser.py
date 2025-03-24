@@ -1,12 +1,12 @@
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.firefox.service import Service
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.firefox import GeckoDriverManager
 import pandas as pd
 import json
 from datetime import datetime
@@ -14,14 +14,14 @@ import random
 
 class ComponentsParser:
     def __init__(self):
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
+        firefox_options = Options()
+        firefox_options.add_argument("--headless")
+        firefox_options.add_argument("--no-sandbox")
+        firefox_options.add_argument("--disable-dev-shm-usage")
         
-        self.driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()),
-            options=chrome_options
+        self.driver = webdriver.Firefox(
+            service=Service(GeckoDriverManager().install()),
+            options=firefox_options
         )
         self.components = []
 
@@ -153,17 +153,38 @@ class ComponentsParser:
         if not self.components:
             return None
             
-        # Фильтруем компоненты по категории и бюджету
-        suitable_components = [
-            comp for comp in self.components 
-            if comp['category'] == category and comp['price'] <= budget
-        ]
+        # Преобразуем цены в числовой формат
+        components_df = pd.DataFrame(self.components)
+        print("Доступные компоненты:", len(components_df))
+        print("Пример цен до обработки:", components_df['price'].head())
         
-        if not suitable_components:
+        def clean_price(price):
+            try:
+                if isinstance(price, (int, float)):
+                    return float(price)
+                cleaned = str(price).replace(r'[^\d.]', '', regex=True)
+                print(f"Преобразование цены: {price} -> {cleaned}")
+                return float(cleaned)
+            except Exception as e:
+                print(f"Ошибка при обработке цены {price}: {e}")
+                return 0
+        
+        components_df['price'] = components_df['price'].apply(clean_price)
+        print("Пример цен после обработки:", components_df['price'].head())
+        
+        # Фильтруем по бюджету с запасом 10%
+        max_budget = budget * 1.1
+        suitable_components = components_df[
+            (components_df['category'] == category) & 
+            (components_df['price'] <= max_budget)
+        ]
+        print("Подходящих компонентов:", len(suitable_components))
+        
+        if len(suitable_components) == 0:
             return None
             
         # Возвращаем случайный подходящий компонент
-        return random.choice(suitable_components)
+        return suitable_components.sample(n=1).iloc[0].to_dict()
 
     def save_data(self):
         """Сохранение данных в CSV и JSON"""

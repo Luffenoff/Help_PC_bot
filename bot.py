@@ -85,6 +85,7 @@ async def handle_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Получаем случайную сборку
             parser = PCParser()
             try:
+                await update.message.reply_text("Собираю актуальные данные о сборках ПК...")
                 parser.parse_dns()
                 parser.parse_citilink()
                 parser.parse_mvideo()
@@ -123,6 +124,7 @@ async def handle_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             parser = ComponentsParser()
             try:
+                await update.message.reply_text("Собираю актуальные данные о комплектующих...")
                 parser.main(category)
                 component = parser.get_component_by_budget(category, budget)
                 
