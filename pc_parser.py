@@ -6,54 +6,361 @@ import json
 from datetime import datetime
 import random
 import re
+import os
+from dotenv import load_dotenv
+import aiohttp
+import asyncio
+from fake_useragent import UserAgent
+import logging
+from typing import Dict, List, Optional
+import hashlib
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
+import undetected_chromedriver as uc
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Загружаем переменные окружения
+load_dotenv()
 
 class PCParser:
     def __init__(self):
         self.pc_builds = []
+        self.ua = UserAgent()
+        self.cache_dir = "cache"
+        self.cache_ttl = 3600  # 1 час
+        self.driver = None
+        self.proxies = self.load_proxies()
         print("Инициализация парсера...")
-        self.setup_driver()
         self.load_data()
         print(f"Всего сборок после инициализации: {len(self.pc_builds)}")
 
-    def setup_driver(self):
-        """Настройка драйвера Selenium"""
-        chrome_options = Options()
-        chrome_options.add_argument('--headless')  # Запуск в фоновом режиме
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--window-size=1920,1080')
-        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        
-        self.driver = webdriver.Chrome(options=chrome_options)
-        self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-            "userAgent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        })
-        self.wait = WebDriverWait(self.driver, 20)  # Увеличиваем время ожидания
-
-    def load_data(self):
-        """Загрузка данных из файла"""
+    def load_proxies(self) -> List[str]:
+        """Загрузка списка прокси"""
         try:
-            with open('pc_builds.json', 'r', encoding='utf-8') as f:
-                self.pc_builds = json.load(f)
-                print(f"Загружено {len(self.pc_builds)} сборок из файла")
-        except FileNotFoundError:
-            print("Файл с данными не найден, добавляем тестовые данные")
-            self.add_test_data()
-            self.save_to_json()
+            # Получаем бесплатные прокси
+            response = requests.get('https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt')
+            if response.status_code == 200:
+                proxies = response.text.strip().split('\n')
+                print(f"Загружено {len(proxies)} прокси")
+                return proxies
         except Exception as e:
-            print(f"Ошибка при загрузке данных: {e}")
-            print("Добавляем тестовые данные")
-            self.add_test_data()
-            self.save_to_json()
+            print(f"Ошибка при загрузке прокси: {e}")
+        return []
+
+    def get_random_proxy(self) -> Optional[str]:
+        """Получение случайного прокси"""
+        if self.proxies:
+            return random.choice(self.proxies)
+        return None
+
+    def setup_driver(self):
+        """Настройка undetected-chromedriver"""
+        try:
+            options = uc.ChromeOptions()
+            options.add_argument('--headless')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            
+            # Добавляем случайный прокси
+            proxy = self.get_random_proxy()
+            if proxy:
+                options.add_argument(f'--proxy-server={proxy}')
+            
+            # Добавляем случайный User-Agent
+            options.add_argument(f'user-agent={self.ua.random}')
+            
+            # Создаем драйвер с дополнительными параметрами
+            self.driver = uc.Chrome(
+                options=options,
+                driver_executable_path=None,
+                browser_executable_path=None,
+                suppress_welcome=True,
+                use_subprocess=True
+            )
+            
+            # Устанавливаем таймаут
+            self.driver.set_page_load_timeout(30)
+            
+            # Добавляем скрипты для обхода обнаружения
+            self.driver.execute_cdp_cmd('Network.setUserAgentOverride', {"userAgent": self.ua.random})
+            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            print("Драйвер успешно настроен")
+        except Exception as e:
+            print(f"Ошибка при настройке драйвера: {e}")
+            raise
+
+    def close_driver(self):
+        """Закрытие драйвера"""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except Exception as e:
+                print(f"Ошибка при закрытии драйвера: {e}")
+            finally:
+                self.driver = None
+
+    def get_cache_key(self, url: str) -> str:
+        """Создание уникального ключа кэша для URL"""
+        return hashlib.md5(url.encode()).hexdigest()
+
+    def get_cached_data(self, url: str) -> Optional[Dict]:
+        """Получение данных из кэша"""
+        cache_key = self.get_cache_key(url)
+        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
+        
+        if os.path.exists(cache_file):
+            file_time = os.path.getmtime(cache_file)
+            if time.time() - file_time < self.cache_ttl:
+                try:
+                    with open(cache_file, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+                except Exception as e:
+                    logger.error(f"Ошибка чтения кэша: {e}")
+        return None
+
+    def save_to_cache(self, url: str, data: Dict):
+        """Сохранение данных в кэш"""
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
+            
+        cache_key = self.get_cache_key(url)
+        cache_file = os.path.join(self.cache_dir, f"{cache_key}.json")
+        
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"Ошибка сохранения в кэш: {e}")
+
+    async def fetch_mobile_api(self, url: str) -> Optional[str]:
+        """Получение данных через мобильное API"""
+        headers = {
+            'User-Agent': self.ua.random,
+            'Accept': 'application/json',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': url,
+            'Origin': url.split('/')[2],
+            'Connection': 'keep-alive'
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=30) as response:
+                    if response.status == 200:
+                        return await response.text()
+                    else:
+                        logger.error(f"Ошибка API: {response.status}")
+                        return None
+        except Exception as e:
+            logger.error(f"Ошибка запроса: {e}")
+            return None
+
+    def parse_dns(self):
+        """Парсинг сборок ПК с DNS"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                if not self.driver:
+                    self.setup_driver()
+                
+                url = "https://www.dns-shop.ru/catalog/17a8a01d16404e77/sborki-pk/"
+                print(f"Парсинг DNS (попытка {retry_count + 1}/{max_retries})...")
+                
+                self.driver.get(url)
+                time.sleep(random.uniform(3, 5))
+                
+                # Ждем загрузки элементов с увеличенным таймаутом
+                wait = WebDriverWait(self.driver, 20)
+                builds = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'catalog-product')))
+                
+                print(f"Найдено сборок на DNS: {len(builds)}")
+                
+                for build in builds:
+                    try:
+                        title = build.find_element(By.CLASS_NAME, 'catalog-product__name').text.strip()
+                        price = build.find_element(By.CLASS_NAME, 'product-buy__price').text.strip()
+                        url = build.find_element(By.CLASS_NAME, 'catalog-product__name').get_attribute('href')
+                        
+                        build_type = 'pc'
+                        purpose = 'gaming' if 'игровой' in title.lower() else 'work'
+                        
+                        print(f"Найдена сборка: {title} - {price}")
+                        
+                        build_data = {
+                            'title': title,
+                            'price': price,
+                            'url': url,
+                            'source': 'DNS',
+                            'type': build_type,
+                            'purpose': purpose,
+                            'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        self.pc_builds.append(build_data)
+                    except Exception as e:
+                        print(f"Ошибка при парсинге сборки DNS: {e}")
+                        continue
+                
+                break  # Если успешно, выходим из цикла
+                
+            except TimeoutException:
+                print(f"Таймаут при парсинге DNS (попытка {retry_count + 1})")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except WebDriverException as e:
+                print(f"Ошибка WebDriver при парсинге DNS: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except Exception as e:
+                print(f"Неожиданная ошибка при парсинге DNS: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            finally:
+                self.close_driver()
+
+    def parse_citilink(self):
+        """Парсинг сборок ПК с Ситилинк"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                if not self.driver:
+                    self.setup_driver()
+                
+                url = "https://www.citilink.ru/catalog/sborki-pk/"
+                print(f"Парсинг Ситилинк (попытка {retry_count + 1}/{max_retries})...")
+                
+                self.driver.get(url)
+                time.sleep(random.uniform(3, 5))
+                
+                # Ждем загрузки элементов с увеличенным таймаутом
+                wait = WebDriverWait(self.driver, 20)
+                builds = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'product_data__gtm-js')))
+                
+                print(f"Найдено сборок на Ситилинк: {len(builds)}")
+                
+                for build in builds:
+                    try:
+                        title = build.find_element(By.CLASS_NAME, 'ProductCardHorizontal__title').text.strip()
+                        price = build.find_element(By.CLASS_NAME, 'ProductCardHorizontal__price_current_price').text.strip()
+                        url = build.find_element(By.CLASS_NAME, 'ProductCardHorizontal__title').get_attribute('href')
+                        
+                        build_type = 'pc'
+                        purpose = 'gaming' if 'игровой' in title.lower() else 'work'
+                        
+                        print(f"Найдена сборка: {title} - {price}")
+                        
+                        build_data = {
+                            'title': title,
+                            'price': price,
+                            'url': url,
+                            'source': 'Ситилинк',
+                            'type': build_type,
+                            'purpose': purpose,
+                            'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        self.pc_builds.append(build_data)
+                    except Exception as e:
+                        print(f"Ошибка при парсинге сборки Ситилинк: {e}")
+                        continue
+                
+                break  # Если успешно, выходим из цикла
+                
+            except TimeoutException:
+                print(f"Таймаут при парсинге Ситилинк (попытка {retry_count + 1})")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except WebDriverException as e:
+                print(f"Ошибка WebDriver при парсинге Ситилинк: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except Exception as e:
+                print(f"Неожиданная ошибка при парсинге Ситилинк: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            finally:
+                self.close_driver()
+
+    def parse_mvideo(self):
+        """Парсинг сборок ПК с М.Видео"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                if not self.driver:
+                    self.setup_driver()
+                
+                url = "https://www.mvideo.ru/kompyutery/sborki-pk-118"
+                print(f"Парсинг М.Видео (попытка {retry_count + 1}/{max_retries})...")
+                
+                self.driver.get(url)
+                time.sleep(random.uniform(3, 5))
+                
+                # Ждем загрузки элементов с увеличенным таймаутом
+                wait = WebDriverWait(self.driver, 20)
+                builds = wait.until(EC.presence_of_all_elements_located((By.CLASS_NAME, 'product-grid__item')))
+                
+                print(f"Найдено сборок на М.Видео: {len(builds)}")
+                
+                for build in builds:
+                    try:
+                        title = build.find_element(By.CLASS_NAME, 'product-title__text').text.strip()
+                        price = build.find_element(By.CLASS_NAME, 'price__main-value').text.strip()
+                        url = build.find_element(By.CLASS_NAME, 'product-title__text').get_attribute('href')
+                        
+                        print(f"Найдена сборка: {title} - {price}")
+                        
+                        build_data = {
+                            'title': title,
+                            'price': price,
+                            'url': url,
+                            'source': 'М.Видео',
+                            'type': 'pc',
+                            'purpose': 'work',
+                            'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        }
+                        self.pc_builds.append(build_data)
+                    except Exception as e:
+                        print(f"Ошибка при парсинге сборки М.Видео: {e}")
+                        continue
+                
+                break  # Если успешно, выходим из цикла
+                
+            except TimeoutException:
+                print(f"Таймаут при парсинге М.Видео (попытка {retry_count + 1})")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except WebDriverException as e:
+                print(f"Ошибка WebDriver при парсинге М.Видео: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            except Exception as e:
+                print(f"Неожиданная ошибка при парсинге М.Видео: {e}")
+                retry_count += 1
+                self.close_driver()
+                time.sleep(random.uniform(5, 10))
+            finally:
+                self.close_driver()
 
     def update_data(self):
         """Обновление данных с сайтов"""
@@ -66,15 +373,12 @@ class PCParser:
             self.pc_builds = []
             self.add_test_data()
             
-            # Пробуем получить новые данные
-            self.parse_regard()  # Начинаем с Regard.ru
-            time.sleep(2)  # Задержка между запросами
-            
+            # Парсим сайты последовательно
             self.parse_dns()
-            time.sleep(2)
+            time.sleep(random.uniform(2, 4))
             
             self.parse_citilink()
-            time.sleep(2)
+            time.sleep(random.uniform(2, 4))
             
             self.parse_mvideo()
             
@@ -91,6 +395,103 @@ class PCParser:
         except Exception as e:
             print(f"Ошибка при обновлении данных: {e}")
             print("Используем существующие данные")
+
+    def close(self):
+        """Закрытие парсера и сохранение данных"""
+        try:
+            self.save_to_json()
+            print("Данные сохранены")
+        except Exception as e:
+            print(f"Ошибка при закрытии парсера: {e}")
+
+    def get_random_user_agent(self):
+        """Получение случайного User-Agent"""
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36'
+        ]
+        return random.choice(user_agents)
+
+    def get_headers(self):
+        """Получение заголовков для запроса"""
+        return {
+            'User-Agent': self.get_random_user_agent(),
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ru-RU,ru;q=0.8,en-US;q=0.5,en;q=0.3',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0'
+        }
+
+    def parse_regard(self):
+        """Парсинг сборок ПК с Regard.ru"""
+        try:
+            url = "https://www.regard.ru/catalog/group4000.htm"
+            print("Парсинг Regard.ru...")
+            
+            # Добавляем случайную задержку
+            time.sleep(random.uniform(2, 5))
+            
+            response = requests.get(url, headers=self.get_headers(), timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            builds = soup.find_all('div', class_='b-content__main-item')
+            print(f"Найдено сборок на Regard.ru: {len(builds)}")
+            
+            for build in builds:
+                try:
+                    title = build.find('a', class_='b-content__main-item-title')
+                    if not title:
+                        continue
+                    title = title.text.strip()
+                    
+                    price = build.find('span', class_='price')
+                    if not price:
+                        continue
+                    price = price.text.strip()
+                    
+                    url = build.find('a', class_='b-content__main-item-title')['href']
+                    if not url.startswith('http'):
+                        url = 'https://www.regard.ru' + url
+                    
+                    print(f"Найдена сборка: {title} - {price}")
+                    
+                    build_data = {
+                        'title': title,
+                        'price': price,
+                        'url': url,
+                        'source': 'Regard.ru',
+                        'type': 'pc',
+                        'purpose': 'work',
+                        'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    self.pc_builds.append(build_data)
+                except Exception as e:
+                    print(f"Ошибка при парсинге сборки Regard.ru: {e}")
+                    continue
+
+        except Exception as e:
+            print(f"Ошибка при парсинге Regard.ru: {e}")
+
+    def load_data(self):
+        """Загрузка данных из файла"""
+        try:
+            with open('pc_builds.json', 'r', encoding='utf-8') as f:
+                self.pc_builds = json.load(f)
+                print(f"Загружено {len(self.pc_builds)} сборок из файла")
+        except FileNotFoundError:
+            print("Файл с данными не найден, добавляем тестовые данные")
+            self.add_test_data()
+            self.save_to_json()
+        except Exception as e:
+            print(f"Ошибка при загрузке данных: {e}")
+            print("Добавляем тестовые данные")
+            self.add_test_data()
+            self.save_to_json()
 
     def add_test_data(self):
         """Добавление тестовых данных"""
@@ -136,211 +537,6 @@ class PCParser:
         print("Добавлены тестовые данные:")
         for build in test_builds:
             print(f"- {build['title']} ({build['price']} руб.)")
-
-    def close(self):
-        """Закрытие драйвера"""
-        if hasattr(self, 'driver'):
-            self.driver.quit()
-
-    def parse_dns(self):
-        """Парсинг сборок ПК с DNS"""
-        try:
-            url = "https://www.dns-shop.ru/catalog/17a8a01d16404e77/sborki-pk/"
-            print("Парсинг DNS...")
-            self.driver.get(url)
-            
-            # Ждем загрузки элементов
-            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'catalog-product')))
-            
-            # Получаем HTML после загрузки
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            builds = soup.find_all('div', class_='catalog-product')
-            print(f"Найдено сборок на DNS: {len(builds)}")
-            
-            for build in builds:
-                try:
-                    title = build.find('a', class_='catalog-product__name')
-                    if not title:
-                        continue
-                    title = title.text.strip()
-                    
-                    price = build.find('div', class_='product-buy__price')
-                    if not price:
-                        continue
-                    price = price.text.strip()
-                    
-                    url = build.find('a', class_='catalog-product__name')['href']
-                    if not url.startswith('http'):
-                        url = 'https://www.dns-shop.ru' + url
-                    
-                    print(f"Найдена сборка: {title} - {price}")
-                    
-                    build_data = {
-                        'title': title,
-                        'price': price,
-                        'url': url,
-                        'source': 'DNS',
-                        'type': 'pc',
-                        'purpose': 'work',
-                        'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    self.pc_builds.append(build_data)
-                except Exception as e:
-                    print(f"Ошибка при парсинге сборки DNS: {e}")
-                    continue
-
-        except Exception as e:
-            print(f"Ошибка при парсинге DNS: {e}")
-
-    def parse_citilink(self):
-        """Парсинг сборок ПК с Ситилинк"""
-        try:
-            url = "https://www.citilink.ru/catalog/sborki-pk/"
-            print("Парсинг Citilink...")
-            self.driver.get(url)
-            
-            # Ждем загрузки элементов
-            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'ProductCardHorizontal')))
-            
-            # Получаем HTML после загрузки
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            builds = soup.find_all('div', class_='ProductCardHorizontal')
-            print(f"Найдено сборок на Citilink: {len(builds)}")
-            
-            for build in builds:
-                try:
-                    title = build.find('a', class_='ProductCardHorizontal__title')
-                    if not title:
-                        continue
-                    title = title.text.strip()
-                    
-                    price = build.find('span', class_='ProductCardHorizontal__price_current-price')
-                    if not price:
-                        continue
-                    price = price.text.strip()
-                    
-                    url = build.find('a', class_='ProductCardHorizontal__title')['href']
-                    if not url.startswith('http'):
-                        url = 'https://www.citilink.ru' + url
-                    
-                    print(f"Найдена сборка: {title} - {price}")
-                    
-                    build_data = {
-                        'title': title,
-                        'price': price,
-                        'url': url,
-                        'source': 'Ситилинк',
-                        'type': 'pc',
-                        'purpose': 'work',
-                        'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    self.pc_builds.append(build_data)
-                except Exception as e:
-                    print(f"Ошибка при парсинге сборки Ситилинк: {e}")
-                    continue
-
-        except Exception as e:
-            print(f"Ошибка при парсинге Citilink: {e}")
-
-    def parse_mvideo(self):
-        """Парсинг сборок ПК с М.Видео"""
-        try:
-            url = "https://www.mvideo.ru/kompyutery/sborki-pk"
-            print("Парсинг М.Видео...")
-            self.driver.get(url)
-            
-            # Ждем загрузки элементов
-            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'product-grid__item')))
-            
-            # Получаем HTML после загрузки
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            builds = soup.find_all('div', class_='product-grid__item')
-            print(f"Найдено сборок на М.Видео: {len(builds)}")
-            
-            for build in builds:
-                try:
-                    title = build.find('a', class_='product-title__text')
-                    if not title:
-                        continue
-                    title = title.text.strip()
-                    
-                    price = build.find('span', class_='price__main-value')
-                    if not price:
-                        continue
-                    price = price.text.strip()
-                    
-                    url = build.find('a', class_='product-title__text')['href']
-                    if not url.startswith('http'):
-                        url = 'https://www.mvideo.ru' + url
-                    
-                    print(f"Найдена сборка: {title} - {price}")
-                    
-                    build_data = {
-                        'title': title,
-                        'price': price,
-                        'url': url,
-                        'source': 'М.Видео',
-                        'type': 'pc',
-                        'purpose': 'work',
-                        'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    self.pc_builds.append(build_data)
-                except Exception as e:
-                    print(f"Ошибка при парсинге сборки М.Видео: {e}")
-                    continue
-
-        except Exception as e:
-            print(f"Ошибка при парсинге М.Видео: {e}")
-
-    def parse_regard(self):
-        """Парсинг сборок ПК с Regard.ru"""
-        try:
-            url = "https://www.regard.ru/catalog/group4000.htm"
-            print("Парсинг Regard.ru...")
-            self.driver.get(url)
-            
-            # Ждем загрузки элементов
-            self.wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'b-content__main-item')))
-            
-            # Получаем HTML после загрузки
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            builds = soup.find_all('div', class_='b-content__main-item')
-            print(f"Найдено сборок на Regard.ru: {len(builds)}")
-            
-            for build in builds:
-                try:
-                    title = build.find('a', class_='b-content__main-item-title')
-                    if not title:
-                        continue
-                    title = title.text.strip()
-                    
-                    price = build.find('span', class_='price')
-                    if not price:
-                        continue
-                    price = price.text.strip()
-                    
-                    url = build.find('a', class_='b-content__main-item-title')['href']
-                    if not url.startswith('http'):
-                        url = 'https://www.regard.ru' + url
-                    
-                    print(f"Найдена сборка: {title} - {price}")
-                    
-                    build_data = {
-                        'title': title,
-                        'price': price,
-                        'url': url,
-                        'source': 'Regard.ru',
-                        'type': 'pc',
-                        'purpose': 'work',
-                        'date_parsed': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    }
-                    self.pc_builds.append(build_data)
-                except Exception as e:
-                    print(f"Ошибка при парсинге сборки Regard.ru: {e}")
-                    continue
-
-        except Exception as e:
-            print(f"Ошибка при парсинге Regard.ru: {e}")
 
     def get_random_build(self, budget, purpose='work', type='pc'):
         """Получение случайной сборки по бюджету и назначению"""
@@ -419,19 +615,17 @@ class PCParser:
             json.dump(self.pc_builds, f, ensure_ascii=False, indent=4)
         print(f"Данные сохранены в {filename}")
 
-def main():
+async def main():
     parser = PCParser()
     try:
         print("Начинаем парсинг сборок ПК...")
-        parser.parse_regard()
-        parser.parse_dns()
-        parser.parse_citilink()
-        parser.parse_mvideo()
+        await parser.update_data()
         parser.save_to_csv()
         parser.save_to_json()
+        parser.close()
         print("Парсинг завершен успешно!")
     except Exception as e:
         print(f"Произошла ошибка: {e}")
 
 if __name__ == "__main__":
-    main() 
+    asyncio.run(main()) 
