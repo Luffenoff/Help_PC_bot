@@ -1,0 +1,5 @@
+﻿title,price,url,source,type,purpose,date_parsed
+"Игровой ПК AMD Ryzen 5 5600X, RTX 3060, 16GB RAM",95000,https://example.com/pc1,Тестовый магазин,pc,gaming,2025-03-30 20:24:40
+"Рабочая станция Intel Core i5 12400F, 32GB RAM",85000,https://example.com/pc2,Тестовый магазин,pc,work,2025-03-30 20:24:40
+Ноутбук Lenovo IdeaPad Gaming 3,75000,https://example.com/laptop1,Тестовый магазин,laptop,gaming,2025-03-30 20:24:40
+Ноутбук HP Pavilion 15,65000,https://example.com/laptop2,Тестовый магазин,laptop,work,2025-03-30 20:24:40

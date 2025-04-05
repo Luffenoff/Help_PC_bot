@@ -118,31 +118,37 @@ async def handle_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         state = user_states.get(user_id, {})
         if state.get('action') in ['build_pc', 'build_laptop']:
-            await update.message.reply_text("Собираю актуальные данные о сборках ПК...")
+            await update.message.reply_text("Собираю данные о подходящих сборках...")
             
-            parser = get_parser('pc')
-            if parser is None:
-                await update.message.reply_text(
-                    "Извините, произошла ошибка при получении данных. Попробуйте позже."
-                )
-                return
-            
+            # Инициализируем парсер, если он еще не инициализирован
+            if parsers['pc'] is None:
+                parsers['pc'] = PCParser()
+                await update.message.reply_text("Обновляю данные о сборках...")
+                parsers['pc'].update_data()
+                
             try:
-                build = parser.get_random_build(
-                    budget=budget,
-                    purpose=state.get('purpose', 'work'),
-                    type=state.get('action', 'pc')
-                )
+                # Получаем подходящую сборку
+                build = parsers['pc'].get_random_build(budget)
                 
                 if build:
                     message = f"Вот что я нашел для вас:\n\n"
-                    message += f"💻 Тип: {'Ноутбук' if state.get('action') == 'build_laptop' else 'ПК'}\n"
-                    message += f"🎯 Назначение: {'Игровой' if state.get('purpose') == 'gaming' else 'Рабочий'}\n"
-                    message += f"💰 Бюджет: {budget} руб.\n\n"
-                    message += f"📋 Комплектация:\n{build['title']}\n\n"
-                    message += f"💵 Цена: {build['price']} руб.\n"
+                    message += f"💻 {build['title']}\n"
+                    message += f"💰 Цена: {build['price']} руб.\n"
                     message += f"🏪 Магазин: {build['source']}\n"
-                    message += f"🔗 Ссылка: {build['url']}"
+                    
+                    # Если есть компоненты, выводим их
+                    if 'components' in build and build['components']:
+                        message += "\n📋 Компоненты:\n"
+                        for comp in build['components'][:5]:  # Выводим первые 5 компонентов
+                            if isinstance(comp, dict) and 'title' in comp:
+                                message += f"• {comp['title']}\n"
+                            else:
+                                message += f"• {comp}\n"
+                        
+                        if len(build['components']) > 5:
+                            message += f"... и еще {len(build['components']) - 5} компонентов\n"
+                    
+                    message += f"\n🔗 Ссылка: {build['url']}"
                     
                     # Добавляем кнопку для поиска другой сборки
                     keyboard = [[InlineKeyboardButton("Найти другую сборку", callback_data=state.get('action'))]]
@@ -155,7 +161,7 @@ async def handle_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
                     await update.message.reply_text(
-                        "К сожалению, не удалось найти подходящую сборку. Попробуйте изменить бюджет или параметры.",
+                        "К сожалению, не удалось найти подходящую сборку. Попробуйте увеличить бюджет.",
                         reply_markup=reply_markup
                     )
                 

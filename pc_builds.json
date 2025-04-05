@@ -1,0 +1,38 @@
+[
+    {
+        "title": "Игровой ПК AMD Ryzen 5 5600X, RTX 3060, 16GB RAM",
+        "price": "95000",
+        "url": "https://example.com/pc1",
+        "source": "Тестовый магазин",
+        "type": "pc",
+        "purpose": "gaming",
+        "date_parsed": "2025-03-30 20:24:40"
+    },
+    {
+        "title": "Рабочая станция Intel Core i5 12400F, 32GB RAM",
+        "price": "85000",
+        "url": "https://example.com/pc2",
+        "source": "Тестовый магазин",
+        "type": "pc",
+        "purpose": "work",
+        "date_parsed": "2025-03-30 20:24:40"
+    },
+    {
+        "title": "Ноутбук Lenovo IdeaPad Gaming 3",
+        "price": "75000",
+        "url": "https://example.com/laptop1",
+        "source": "Тестовый магазин",
+        "type": "laptop",
+        "purpose": "gaming",
+        "date_parsed": "2025-03-30 20:24:40"
+    },
+    {
+        "title": "Ноутбук HP Pavilion 15",
+        "price": "65000",
+        "url": "https://example.com/laptop2",
+        "source": "Тестовый магазин",
+        "type": "laptop",
+        "purpose": "work",
+        "date_parsed": "2025-03-30 20:24:40"
+    }
+]
