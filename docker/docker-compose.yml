@@ -1,0 +1,11 @@
+version: "3"
+
+services:
+  bot:
+    build: .
+    volumes:
+      - ./bot_database.db:/app/bot_database.db
+      - ./config.py:/app/config.py
+    environment:
+      - BOT_TOKEN = ${BOT_TOKEN}
+    restart: unless-stopped
