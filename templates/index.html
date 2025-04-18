@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Главная{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Панель управления</h1>
+</div>
+
+<div class="row">
+    <!-- Статистика компонентов -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Компоненты</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Категория</th>
+                                <th>Количество</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for category in categories %}
+                            <tr>
+                                <td>{{ category.name }}</td>
+                                <td>{{ category.count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика сборок -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Сборки</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Тип устройства</th>
+                                <th>Количество</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for device_type in device_types %}
+                            <tr>
+                                <td>{{ device_type.name }}</td>
+                                <td>{{ device_type.count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние добавленные компоненты -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Последние добавленные компоненты</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Категория</th>
+                        <th>Цена</th>
+                        <th>Дата добавления</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for component in recent_components %}
+                    <tr>
+                        <td>{{ component.name }}</td>
+                        <td>{{ component.category_name }}</td>
+                        <td>{{ component.price }} руб.</td>
+                        <td>{{ component.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Последние добавленные сборки -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Последние добавленные сборки</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Тип устройства</th>
+                        <th>Общая стоимость</th>
+                        <th>Дата добавления</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for build in recent_builds %}
+                    <tr>
+                        <td>{{ build.name }}</td>
+                        <td>{{ build.device_type_name }}</td>
+                        <td>{{ build.total_price }} руб.</td>
+                        <td>{{ build.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

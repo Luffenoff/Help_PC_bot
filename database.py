@@ -82,6 +82,7 @@ def init_db():
         total_price INTEGER,
         description TEXT,
         image_url TEXT,
+        link TEXT,
         FOREIGN KEY (device_type_id) REFERENCES device_types (id),
         FOREIGN KEY (price_category_id) REFERENCES price_categories (id)
     )
@@ -264,7 +265,7 @@ def add_component(name, category_id, price, price_category_id, description="", s
     conn.close()
     return component_id
 
-def add_build(name, device_type_id, price_category_id, description="", component_ids=None, image_url=None):
+def add_build(name, device_type_id, price_category_id, description="", component_ids=None, image_url=None, link=None):
     """Добавление сборки в базу данных"""
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -283,9 +284,9 @@ def add_build(name, device_type_id, price_category_id, description="", component
     
     # Добавляем сборку
     cursor.execute("""
-        INSERT INTO pc_builds (name, device_type_id, price_category_id, total_price, description, image_url)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (name, device_type_id, price_category_id, total_price, description, image_url))
+        INSERT INTO pc_builds (name, device_type_id, price_category_id, total_price, description, image_url, link)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (name, device_type_id, price_category_id, total_price, description, image_url, link))
     
     build_id = cursor.lastrowid
     
@@ -481,7 +482,9 @@ def add_test_data():
         device_type_id=1,  # Игровой ПК
         price_category_id=1,  # Бюджетный
         description="Базовая игровая сборка для несложных игр и киберспортивных дисциплин",
-        component_ids=[cpu_budget, gpu_budget, ram_budget, storage_budget]
+        component_ids=[cpu_budget, gpu_budget, ram_budget, storage_budget],
+        image_url="https://example.com/gaming_pc_budget.jpg",
+        link="https://example.com/gaming_pc_budget"
     )
     
     gaming_pc_mid = add_build(
@@ -489,7 +492,9 @@ def add_test_data():
         device_type_id=1,  # Игровой ПК
         price_category_id=2,  # Средний
         description="Оптимальная игровая сборка для современных игр в Full HD разрешении",
-        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid]
+        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid],
+        image_url="https://example.com/gaming_pc_mid.jpg",
+        link="https://example.com/gaming_pc_mid"
     )
     
     gaming_pc_premium = add_build(
@@ -497,7 +502,9 @@ def add_test_data():
         device_type_id=1,  # Игровой ПК
         price_category_id=3,  # Премиум
         description="Мощная игровая сборка для 4K-гейминга и стриминга",
-        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium]
+        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium],
+        image_url="https://example.com/gaming_pc_premium.jpg",
+        link="https://example.com/gaming_pc_premium"
     )
     
     work_pc_budget = add_build(
@@ -505,7 +512,9 @@ def add_test_data():
         device_type_id=2,  # Рабочий ПК
         price_category_id=1,  # Бюджетный
         description="Базовая сборка для офисных задач и интернета",
-        component_ids=[cpu_budget, ram_budget, storage_budget]
+        component_ids=[cpu_budget, ram_budget, storage_budget],
+        image_url="https://example.com/work_pc_budget.jpg",
+        link="https://example.com/work_pc_budget"
     )
     
     work_pc_mid = add_build(
@@ -513,7 +522,9 @@ def add_test_data():
         device_type_id=2,  # Рабочий ПК
         price_category_id=2,  # Средний
         description="Оптимальная сборка для работы с графикой и видеомонтажа",
-        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid]
+        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid],
+        image_url="https://example.com/work_pc_mid.jpg",
+        link="https://example.com/work_pc_mid"
     )
     
     work_pc_premium = add_build(
@@ -521,7 +532,9 @@ def add_test_data():
         device_type_id=2,  # Рабочий ПК
         price_category_id=3,  # Премиум
         description="Высокопроизводительная рабочая станция для 3D-рендеринга и сложных вычислений",
-        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium]
+        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium],
+        image_url="https://example.com/work_pc_premium.jpg",
+        link="https://example.com/work_pc_premium"
     )
     
     print("Тестовые данные успешно добавлены в базу")
