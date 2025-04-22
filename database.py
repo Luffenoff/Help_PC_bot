@@ -1,6 +1,7 @@
 import sqlite3
 import json
 from datetime import datetime
+import random
 
 DATABASE_FILE = "bot_database.db"
 
@@ -303,241 +304,132 @@ def add_build(name, device_type_id, price_category_id, description="", component
     return build_id
 
 def add_test_data():
-    """Добавление тестовых данных в базу для демонстрации"""
-    # Добавляем компоненты
-    cpu_budget = add_component(
-        name="Intel Core i3-12100F",
-        category_id=1,  # Процессоры
-        price=7990,
-        price_category_id=1,  # Бюджетный
-        description="4-ядерный процессор начального уровня 12-го поколения",
-        specs={
-            "Ядра": "4",
-            "Потоки": "8",
-            "Базовая частота": "3.3 GHz",
-            "Турбо частота": "4.3 GHz",
-            "TDP": "65W"
-        }
-    )
+    """Добавление тестовых данных в базу данных"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    cpu_mid = add_component(
-        name="AMD Ryzen 5 5600X",
-        category_id=1,  # Процессоры
-        price=16990,
-        price_category_id=2,  # Средний
-        description="6-ядерный процессор среднего уровня с высокой производительностью",
-        specs={
-            "Ядра": "6",
-            "Потоки": "12",
-            "Базовая частота": "3.7 GHz",
-            "Турбо частота": "4.6 GHz",
-            "TDP": "65W"
-        }
-    )
+    # Добавляем тестовые сборки
+    test_builds = [
+        (1, "Игровой ПК начального уровня", 1, 1, 35000, "Бюджетный игровой ПК для начинающих", None, "https://example.com/build1"),
+        (2, "Игровой ПК среднего уровня", 1, 2, 60000, "Сбалансированный игровой ПК", None, "https://example.com/build2"),
+        (3, "Игровой ПК премиум", 1, 3, 120000, "Мощный игровой ПК", None, "https://example.com/build3"),
+        (4, "Рабочий ПК начального уровня", 2, 1, 30000, "Бюджетный ПК для офиса", None, "https://example.com/build4"),
+        (5, "Рабочий ПК среднего уровня", 2, 2, 50000, "Сбалансированный рабочий ПК", None, "https://example.com/build5"),
+        (6, "Рабочий ПК премиум", 2, 3, 100000, "Мощный рабочий ПК", None, "https://example.com/build6"),
+        (7, "Ноутбук начального уровня", 3, 1, 40000, "Бюджетный ноутбук", None, "https://example.com/build7"),
+        (8, "Ноутбук среднего уровня", 3, 2, 70000, "Сбалансированный ноутбук", None, "https://example.com/build8"),
+        (9, "Ноутбук премиум", 3, 3, 150000, "Мощный ноутбук", None, "https://example.com/build9")
+    ]
     
-    cpu_premium = add_component(
-        name="Intel Core i7-13700K",
-        category_id=1,  # Процессоры
-        price=39990,
-        price_category_id=3,  # Премиум
-        description="16-ядерный процессор высокого уровня 13-го поколения",
-        specs={
-            "Ядра": "16 (8P+8E)",
-            "Потоки": "24",
-            "Базовая частота": "3.4 GHz",
-            "Турбо частота": "5.4 GHz",
-            "TDP": "125W"
-        }
-    )
+    cursor.executemany("""
+        INSERT OR REPLACE INTO pc_builds 
+        (id, name, device_type_id, price_category_id, total_price, description, image_url, link)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, test_builds)
     
-    gpu_budget = add_component(
-        name="NVIDIA GeForce GTX 1650",
-        category_id=2,  # Видеокарты
-        price=15990,
-        price_category_id=1,  # Бюджетный
-        description="Видеокарта начального уровня для игр с низкими/средними настройками",
-        specs={
-            "Память": "4 GB GDDR6",
-            "Частота памяти": "8 Gbps",
-            "Шина памяти": "128-bit",
-            "TDP": "75W"
-        }
-    )
+    conn.commit()
+    conn.close()
+    print("Тестовые данные добавлены в базу данных")
+
+def get_random_build(price_category_id: int) -> dict:
+    """Получает случайную сборку для указанной ценовой категории"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    gpu_mid = add_component(
-        name="NVIDIA GeForce RTX 3060",
-        category_id=2,  # Видеокарты
-        price=32990,
-        price_category_id=2,  # Средний
-        description="Видеокарта среднего уровня с поддержкой трассировки лучей",
-        specs={
-            "Память": "12 GB GDDR6",
-            "Частота памяти": "15 Gbps",
-            "Шина памяти": "192-bit",
-            "TDP": "170W"
-        }
-    )
+    # Получаем все сборки для указанной ценовой категории
+    cursor.execute("""
+        SELECT id, name, price, description, link
+        FROM pc_builds
+        WHERE price_category_id = ?
+    """, (price_category_id,))
     
-    gpu_premium = add_component(
-        name="NVIDIA GeForce RTX 4080",
-        category_id=2,  # Видеокарты
-        price=109990,
-        price_category_id=3,  # Премиум
-        description="Высокопроизводительная видеокарта нового поколения Ada Lovelace",
-        specs={
-            "Память": "16 GB GDDR6X",
-            "Частота памяти": "22.4 Gbps",
-            "Шина памяти": "256-bit",
-            "TDP": "320W"
-        }
-    )
+    builds = cursor.fetchall()
+    conn.close()
     
-    ram_budget = add_component(
-        name="Crucial 16GB DDR4 3200MHz",
-        category_id=3,  # Оперативная память
-        price=4990,
-        price_category_id=1,  # Бюджетный
-        description="Комплект памяти 2x8GB для базовых систем",
-        specs={
-            "Объем": "16GB (2x8GB)",
-            "Тип": "DDR4",
-            "Частота": "3200 MHz",
-            "Тайминги": "CL16"
-        }
-    )
+    if not builds:
+        return None
     
-    ram_mid = add_component(
-        name="Kingston FURY Beast 32GB DDR4 3600MHz",
-        category_id=3,  # Оперативная память
-        price=11990,
-        price_category_id=2,  # Средний
-        description="Производительная память с подсветкой RGB",
-        specs={
-            "Объем": "32GB (2x16GB)",
-            "Тип": "DDR4",
-            "Частота": "3600 MHz",
-            "Тайминги": "CL18"
-        }
-    )
+    # Выбираем случайную сборку
+    build = random.choice(builds)
     
-    ram_premium = add_component(
-        name="G.Skill Trident Z5 RGB 64GB DDR5 6000MHz",
-        category_id=3,  # Оперативная память
-        price=29990,
-        price_category_id=3,  # Премиум
-        description="Высокоскоростная память DDR5 с RGB подсветкой",
-        specs={
-            "Объем": "64GB (2x32GB)",
-            "Тип": "DDR5",
-            "Частота": "6000 MHz",
-            "Тайминги": "CL36"
-        }
-    )
+    # Преобразуем в словарь
+    return {
+        'id': build[0],
+        'name': build[1],
+        'price': build[2],
+        'description': build[3],
+        'link': build[4]
+    }
+
+def add_your_builds():
+    """Добавление ваших сборок в базу данных"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    storage_budget = add_component(
-        name="Samsung 980 500GB NVMe SSD",
-        category_id=4,  # Накопители
-        price=4990,
-        price_category_id=1,  # Бюджетный
-        description="Быстрый SSD накопитель для базовых задач",
-        specs={
-            "Объем": "500GB",
-            "Интерфейс": "PCIe 3.0 x4 NVMe",
-            "Скорость чтения": "3500 MB/s",
-            "Скорость записи": "2900 MB/s"
-        }
-    )
+    # Ваши сборки
+    your_builds = [
+        # Формат: (id, name, device_type_id, price_category_id, total_price, description, image_url, link)
+        # device_type_id: 1 - игровой ПК, 2 - рабочий ПК, 3 - ноутбук
+        # price_category_id: 1 - бюджетный, 2 - средний, 3 - премиум
+        
+        # Игровые ПК
+        (10, "Игровой ПК Бюджет", 1, 1, 35000, 
+         "Бюджетный игровой ПК для начинающих геймеров", 
+         None, 
+         "https://example.com/your_build1"),
+         
+        (11, "Игровой ПК Средний", 1, 2, 60000, 
+         "Сбалансированный игровой ПК для комфортного гейминга", 
+         None, 
+         "https://example.com/your_build2"),
+         
+        (12, "Игровой ПК Премиум", 1, 3, 120000, 
+         "Мощный игровой ПК для профессиональных геймеров", 
+         None, 
+         "https://example.com/your_build3"),
+        
+        # Рабочие ПК
+        (13, "Рабочий ПК Бюджет", 2, 1, 30000, 
+         "Бюджетный ПК для офисных задач", 
+         None, 
+         "https://example.com/your_build4"),
+         
+        (14, "Рабочий ПК Средний", 2, 2, 50000, 
+         "Сбалансированный ПК для работы с графикой", 
+         None, 
+         "https://example.com/your_build5"),
+         
+        (15, "Рабочий ПК Премиум", 2, 3, 100000, 
+         "Мощный ПК для профессиональной работы", 
+         None, 
+         "https://example.com/your_build6"),
+        
+        # Ноутбуки
+        (16, "Ноутбук Бюджет", 3, 1, 40000, 
+         "Бюджетный ноутбук для повседневных задач", 
+         None, 
+         "https://example.com/your_build7"),
+         
+        (17, "Ноутбук Средний", 3, 2, 70000, 
+         "Сбалансированный ноутбук для работы и развлечений", 
+         None, 
+         "https://example.com/your_build8"),
+         
+        (18, "Ноутбук Премиум", 3, 3, 150000, 
+         "Мощный ноутбук для профессионального использования", 
+         None, 
+         "https://example.com/your_build9")
+    ]
     
-    storage_mid = add_component(
-        name="Samsung 970 EVO Plus 1TB NVMe SSD",
-        category_id=4,  # Накопители
-        price=10990,
-        price_category_id=2,  # Средний
-        description="Производительный NVMe SSD накопитель",
-        specs={
-            "Объем": "1TB",
-            "Интерфейс": "PCIe 3.0 x4 NVMe",
-            "Скорость чтения": "3500 MB/s",
-            "Скорость записи": "3300 MB/s"
-        }
-    )
+    cursor.executemany("""
+        INSERT OR REPLACE INTO pc_builds 
+        (id, name, device_type_id, price_category_id, total_price, description, image_url, link)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, your_builds)
     
-    storage_premium = add_component(
-        name="Samsung 990 PRO 2TB NVMe SSD",
-        category_id=4,  # Накопители
-        price=24990,
-        price_category_id=3,  # Премиум
-        description="Высокопроизводительный NVMe SSD накопитель PCIe 4.0",
-        specs={
-            "Объем": "2TB",
-            "Интерфейс": "PCIe 4.0 x4 NVMe",
-            "Скорость чтения": "7450 MB/s",
-            "Скорость записи": "6900 MB/s"
-        }
-    )
-    
-    # Добавляем сборки PC
-    gaming_pc_budget = add_build(
-        name="Игровой ПК Старт",
-        device_type_id=1,  # Игровой ПК
-        price_category_id=1,  # Бюджетный
-        description="Базовая игровая сборка для несложных игр и киберспортивных дисциплин",
-        component_ids=[cpu_budget, gpu_budget, ram_budget, storage_budget],
-        image_url="https://example.com/gaming_pc_budget.jpg",
-        link="https://example.com/gaming_pc_budget"
-    )
-    
-    gaming_pc_mid = add_build(
-        name="Игровой ПК Баланс",
-        device_type_id=1,  # Игровой ПК
-        price_category_id=2,  # Средний
-        description="Оптимальная игровая сборка для современных игр в Full HD разрешении",
-        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid],
-        image_url="https://example.com/gaming_pc_mid.jpg",
-        link="https://example.com/gaming_pc_mid"
-    )
-    
-    gaming_pc_premium = add_build(
-        name="Игровой ПК Ультра",
-        device_type_id=1,  # Игровой ПК
-        price_category_id=3,  # Премиум
-        description="Мощная игровая сборка для 4K-гейминга и стриминга",
-        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium],
-        image_url="https://example.com/gaming_pc_premium.jpg",
-        link="https://example.com/gaming_pc_premium"
-    )
-    
-    work_pc_budget = add_build(
-        name="Рабочий ПК Офис",
-        device_type_id=2,  # Рабочий ПК
-        price_category_id=1,  # Бюджетный
-        description="Базовая сборка для офисных задач и интернета",
-        component_ids=[cpu_budget, ram_budget, storage_budget],
-        image_url="https://example.com/work_pc_budget.jpg",
-        link="https://example.com/work_pc_budget"
-    )
-    
-    work_pc_mid = add_build(
-        name="Рабочий ПК Профи",
-        device_type_id=2,  # Рабочий ПК
-        price_category_id=2,  # Средний
-        description="Оптимальная сборка для работы с графикой и видеомонтажа",
-        component_ids=[cpu_mid, gpu_mid, ram_mid, storage_mid],
-        image_url="https://example.com/work_pc_mid.jpg",
-        link="https://example.com/work_pc_mid"
-    )
-    
-    work_pc_premium = add_build(
-        name="Рабочий ПК Студия",
-        device_type_id=2,  # Рабочий ПК
-        price_category_id=3,  # Премиум
-        description="Высокопроизводительная рабочая станция для 3D-рендеринга и сложных вычислений",
-        component_ids=[cpu_premium, gpu_premium, ram_premium, storage_premium],
-        image_url="https://example.com/work_pc_premium.jpg",
-        link="https://example.com/work_pc_premium"
-    )
-    
-    print("Тестовые данные успешно добавлены в базу")
+    conn.commit()
+    conn.close()
+    print("Ваши сборки добавлены в базу данных")
 
 # Инициализация БД при импорте модуля
 init_db()

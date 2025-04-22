@@ -1,5 +1,6 @@
 import os
-from database import init_db, add_test_data
+from database import init_db
+from add_test_data import add_test_data
 
 def recreate_database():
     """Пересоздание базы данных"""
@@ -8,13 +9,15 @@ def recreate_database():
         os.remove("bot_database.db")
         print("Старая база данных удалена")
     
-    # Создаем новую базу данных
+    # Инициализируем новую базу данных
     init_db()
     print("Новая база данных создана")
     
     # Добавляем тестовые данные
     add_test_data()
     print("Тестовые данные добавлены")
+    
+    print("База данных успешно пересоздана с тестовыми данными!")
 
 if __name__ == "__main__":
     recreate_database() 
