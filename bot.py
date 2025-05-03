@@ -7,21 +7,15 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Messa
 from database import (
     get_db_connection, update_user_last_active, get_device_types,
     get_price_categories, get_component_categories, get_build_details,
-    get_random_build, add_test_data, add_your_builds
+    get_builds_by_type_and_price, get_components_by_category, get_component_details,
+    get_random_build
 )
-from database import get_builds_by_type_and_price, get_components_by_category, get_component_details
 import json
 
-# Загружаем переменные окружения
+
 load_dotenv()
 
-# Добавляем тестовые данные в базу
-add_test_data()
 
-# Добавляем ваши сборки в базу
-add_your_builds()
-
-# Состояния для ConversationHandler
 (
     START,
     SELECTING_MAIN_MENU,
@@ -138,20 +132,11 @@ async def select_price_category(update: Update, context: ContextTypes.DEFAULT_TY
     """Обработчик выбора ценовой категории"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID типа устройства из callback_data
     device_type_id = int(query.data.split("_")[-1])
-    
-    # Сохраняем выбор пользователя
-    user_states[user_id]["device_type_id"] = device_type_id
-    
-    # Получаем ценовые категории из БД
+    user_states[user_id] = {"device_type_id": device_type_id}
     price_categories = get_price_categories()
-    
-    # Создаем клавиатуру с ценовыми категориями и отображаем диапазон цен
     keyboard = []
     for price_category in price_categories:
         # Форматируем цены с разделителями тысяч
@@ -184,7 +169,7 @@ async def select_price_category(update: Update, context: ContextTypes.DEFAULT_TY
     return SELECTING_PRICE_CATEGORY
 
 async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик отображения случайной сборки по типу и цене"""
+    """Обработчик отображения сборок"""
     query = update.callback_query
     await query.answer()
     
@@ -211,153 +196,25 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
     else:
-        # Выбираем случайную сборку
-        import random
-        build = random.choice(builds)
+        # Создаем клавиатуру со сборками
+        keyboard = []
+        for build in builds:
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{build['name']} - {build['total_price']} руб.", 
+                    callback_data=f"build_{build['id']}"
+                )
+            ])
         
-        # Получаем детали сборки
-        build_details = get_build_details(build['id'])
-        
-        # Формируем сообщение
-        message = f"🎮 {build['name']}\n\n"
-        message += f"💰 Цена: {build['total_price']} руб.\n\n"
-        message += f"📝 Описание: {build['description']}\n\n"
-        
-        # Добавляем ссылку на сборку, если она есть
-        if build.get('link'):
-            message += f"🔗 Ссылка на сборку: {build['link']}\n\n"
-        
-        if build_details and build_details.get('components'):
-            message += "Компоненты:\n"
-            for component in build_details['components']:
-                message += f"• {component.get('name', '')} - {component.get('price', 0)} руб.\n"
-                if component.get('specs'):
-                    try:
-                        specs = json.loads(component['specs'])
-                        for spec_name, spec_value in specs.items():
-                            message += f"  - {spec_name}: {spec_value}\n"
-                    except:
-                        pass
-        
-        # Создаем клавиатуру с кнопками навигации
-        keyboard = [
-            [
-                InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price"),
-                InlineKeyboardButton("➡️ Следующая", callback_data=f"next_build_{price_category_id}")
-            ]
-        ]
+        # Добавляем кнопку возврата
+        keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await query.edit_message_text(
-            message,
+            "Доступные сборки:",
             reply_markup=reply_markup
         )
-    
-    return VIEWING_BUILDS
-
-async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик переключения на следующую сборку"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    
-    # Получаем ID ценовой категории из callback_data
-    price_category_id = int(query.data.split("_")[-1])
-    
-    # Получаем ID типа устройства из состояния пользователя
-    device_type_id = user_states[user_id]["device_type_id"]
-    
-    # Получаем все сборки для данного типа устройства и ценовой категории
-    builds = get_builds_by_type_and_price(device_type_id, price_category_id)
-    
-    if not builds:
-        await query.message.reply_text(
-            "К сожалению, сборки для выбранной ценовой категории не найдены.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⬅️ Назад", callback_data=f"back_to_price")
-            ]])
-        )
-        return VIEWING_BUILDS
-    
-    # Инициализируем список показанных сборок, если его еще нет
-    if 'shown_builds' not in user_states[user_id]:
-        user_states[user_id]['shown_builds'] = []
-    
-    # Фильтруем сборки, которые еще не были показаны
-    available_builds = [b for b in builds if b['id'] not in user_states[user_id]['shown_builds']]
-    
-    # Если все сборки уже были показаны, показываем сообщение об этом
-    if not available_builds:
-        # Очищаем список показанных сборок
-        user_states[user_id]['shown_builds'] = []
-        
-        # Создаем клавиатуру только с кнопкой "Назад"
-        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Удаляем предыдущее сообщение
-        await query.message.delete()
-        
-        # Отправляем сообщение о том, что все сборки показаны
-        await query.message.reply_text(
-            "Вы просмотрели все доступные сборки для выбранной категории.\n\n"
-            "Хотите вернуться к выбору ценовой категории?",
-            reply_markup=reply_markup
-        )
-        
-        return VIEWING_BUILDS
-    
-    # Выбираем случайную сборку из доступных
-    import random
-    build = random.choice(available_builds)
-    
-    # Добавляем ID сборки в список показанных
-    user_states[user_id]['shown_builds'].append(build['id'])
-    
-    # Получаем детали сборки
-    build_details = get_build_details(build['id'])
-    
-    # Формируем сообщение
-    message = f"🎮 {build['name']}\n\n"
-    message += f"💰 Цена: {build['total_price']} руб.\n\n"
-    message += f"📝 Описание: {build['description']}\n\n"
-    
-    # Добавляем ссылку на сборку, если она есть
-    if build.get('link'):
-        message += f"🔗 Ссылка на сборку: {build['link']}\n\n"
-    
-    if build_details and build_details.get('components'):
-        message += "Компоненты:\n"
-        for component in build_details['components']:
-            message += f"• {component.get('name', '')} - {component.get('price', 0)} руб.\n"
-            if component.get('specs'):
-                try:
-                    specs = json.loads(component['specs'])
-                    for spec_name, spec_value in specs.items():
-                        message += f"  - {spec_name}: {spec_value}\n"
-                except:
-                    pass
-    
-    # Создаем клавиатуру с кнопками навигации
-    keyboard = [
-        [
-            InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price"),
-            InlineKeyboardButton("➡️ Следующая", callback_data=f"next_build_{price_category_id}")
-        ]
-    ]
-    
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Удаляем предыдущее сообщение
-    await query.message.delete()
-    
-    # Отправляем новое сообщение
-    await query.message.reply_text(
-        message,
-        reply_markup=reply_markup
-    )
     
     return VIEWING_BUILDS
 
@@ -391,7 +248,6 @@ async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     
     for component in components:
         message_text += f"- {component['name']} - {component['price']} руб.\n"
-    
     # Создаем клавиатуру
     keyboard = [[InlineKeyboardButton("⬅️ Назад к списку", callback_data="back_to_builds")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -411,17 +267,15 @@ async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode="Markdown",
             reply_markup=reply_markup
         )
-    
     return VIEWING_BUILD_DETAILS
+
 
 async def components_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик меню компонентов"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
     # Получаем категории компонентов из БД
     component_categories = get_component_categories()
     
@@ -457,10 +311,9 @@ async def show_components(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Получаем ID категории из callback_data
     category_id = int(query.data.split("_")[-1])
-    
     # Сохраняем выбор пользователя
     user_states[user_id]["component_category_id"] = category_id
-    # Получаем компоненты из БД
+    # компоненты из БД
     components = get_components_by_category(category_id)
     if not components:
         # компонентов нет, сообщение
@@ -530,10 +383,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             "🔍 *Справка по использованию бота*\n\n"
             "Этот бот поможет вам выбрать готовую сборку ПК или отдельные компоненты.\n\n"
@@ -569,6 +420,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопок возврата"""
     query = update.callback_query
     await query.answer()
     action = query.data
@@ -672,46 +524,153 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return await components_menu(update, context)
 
+async def show_random_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик отображения случайной сборки"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    update_user_last_active(user_id)
+    
+    # Получаем ID ценовой категории из callback_data
+    price_category_id = int(query.data.split("_")[-1])
+    
+    # Сохраняем выбор пользователя
+    user_states[user_id]["price_category_id"] = price_category_id
+    
+    # Получаем случайную сборку из БД
+    device_type_id = user_states[user_id]["device_type_id"]
+    build_details = get_random_build(device_type_id, price_category_id)
+    
+    if not build_details:
+        # Если сборок нет, показываем сообщение
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "К сожалению, сборок по заданным параметрам не найдено.",
+            reply_markup=reply_markup
+        )
+    else:
+        build = build_details["build"]
+        components = build_details["components"]
+        
+        # Формируем текст сообщения
+        message_text = f"*{build['name']}*\n\n"
+        message_text += f"{build['description']}\n\n"
+        message_text += f"*Цена:* {build['total_price']} руб.\n\n"
+        message_text += "*Компоненты:*\n"
+        
+        for component in components:
+            message_text += f"- {component['name']} - {component['price']} руб.\n"
+        
+        # Создаем клавиатуру
+        keyboard = [
+            [InlineKeyboardButton("🔄 Следующая сборка", callback_data=f"next_build_{price_category_id}")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Если есть изображение, отправляем его
+        if build["image_url"]:
+            await query.message.reply_photo(
+                photo=build["image_url"],
+                caption=message_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+            await query.message.delete()
+        else:
+            await query.edit_message_text(
+                text=message_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+    
+    return VIEWING_BUILDS
+
+async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки 'Следующая сборка'"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    update_user_last_active(user_id)
+    
+    # Получаем ID ценовой категории из callback_data
+    price_category_id = int(query.data.split("_")[-1])
+    
+    # Получаем случайную сборку из БД
+    device_type_id = user_states[user_id]["device_type_id"]
+    build_details = get_random_build(device_type_id, price_category_id)
+    
+    if not build_details:
+        # Если сборок нет, показываем сообщение
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await query.edit_message_text(
+            "К сожалению, сборок по заданным параметрам не найдено.",
+            reply_markup=reply_markup
+        )
+    else:
+        build = build_details["build"]
+        components = build_details["components"]
+        
+        # Формируем текст сообщения
+        message_text = f"*{build['name']}*\n\n"
+        message_text += f"{build['description']}\n\n"
+        message_text += f"*Цена:* {build['total_price']} руб.\n\n"
+        message_text += "*Компоненты:*\n"
+        
+        for component in components:
+            message_text += f"- {component['name']} - {component['price']} руб.\n"
+        
+        # Создаем клавиатуру
+        keyboard = [
+            [InlineKeyboardButton("🔄 Следующая сборка", callback_data=f"next_build_{price_category_id}")],
+            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Если есть изображение, отправляем его
+        if build["image_url"]:
+            await query.message.reply_photo(
+                photo=build["image_url"],
+                caption=message_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+            await query.message.delete()
+        else:
+            await query.edit_message_text(
+                text=message_text,
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+    
+    return VIEWING_BUILDS
+
 def main():
-    """Основная функция запуска бота"""
+    """Запуск бота"""
     application = ApplicationBuilder().token(TOKEN).build()
     
-    # Создаем обработчик диалога
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
-        states={
-            SELECTING_MAIN_MENU: [
-                CallbackQueryHandler(build_pc, pattern="^build_pc$"),
-                CallbackQueryHandler(components_menu, pattern="^components$"),
-                CallbackQueryHandler(help_command, pattern="^help$")
-            ],
-            SELECTING_DEVICE_TYPE: [
-                CallbackQueryHandler(select_price_category, pattern="^device_"),
-                CallbackQueryHandler(back_handler, pattern="^back_to_main$")
-            ],
-            SELECTING_PRICE_CATEGORY: [
-                CallbackQueryHandler(show_builds, pattern="^price_"),
-                CallbackQueryHandler(back_handler, pattern="^back_to_device$")
-            ],
-            VIEWING_BUILDS: [
-                CallbackQueryHandler(next_build, pattern="^next_build_"),
-                CallbackQueryHandler(back_handler, pattern="^back_to_price$")
-            ],
-            SELECTING_COMPONENT_CATEGORY: [
-                CallbackQueryHandler(show_components, pattern="^category_"),
-                CallbackQueryHandler(back_handler, pattern="^back_to_main$")
-            ],
-            VIEWING_COMPONENTS: [
-                CallbackQueryHandler(show_component_details, pattern="^component_"),
-                CallbackQueryHandler(back_handler, pattern="^back_to_categories$")
-            ],
-            VIEWING_COMPONENT_DETAILS: [
-                CallbackQueryHandler(back_handler, pattern="^back_to_components$")
-            ]
-        },
-        fallbacks=[CommandHandler("start", start)]
-    )
-    application.add_handler(conv_handler)
+    # Добавляем обработчики
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    
+    # Обработчики для кнопок
+    application.add_handler(CallbackQueryHandler(build_pc, pattern="^build_pc$"))
+    application.add_handler(CallbackQueryHandler(components_menu, pattern="^components$"))
+    application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
+    application.add_handler(CallbackQueryHandler(back_handler, pattern="^back_to"))
+    application.add_handler(CallbackQueryHandler(select_price_category, pattern="^device_type_"))
+    application.add_handler(CallbackQueryHandler(show_random_build, pattern="^price_category_"))
+    application.add_handler(CallbackQueryHandler(next_build, pattern="^next_build_"))
+    application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
+    application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
+    
+    # Запускаем бота
     application.run_polling()
 
     
