@@ -150,6 +150,9 @@ def init_db():
     
     # Инициализируем базовые данные
     init_basic_data()
+    
+    # Исправляем ценовые категории
+    fix_price_categories()
 
 def update_user_last_active(user_id):
     """Обновление времени последней активности пользователя"""
@@ -293,6 +296,22 @@ def add_build(name, device_type_id, price_category_id, description="", component
         
         total_price = sum(component["price"] for component in components)
     
+    # Получаем границы ценовой категории
+    cursor.execute("SELECT min_price, max_price FROM price_categories WHERE id = ?", (price_category_id,))
+    price_range = cursor.fetchone()
+    
+    if price_range and (total_price < price_range["min_price"] or total_price > price_range["max_price"]):
+        # Если цена не соответствует категории, выбираем правильную категорию
+        cursor.execute("""
+            SELECT id FROM price_categories 
+            WHERE min_price <= ? AND max_price >= ?
+            ORDER BY min_price
+            LIMIT 1
+        """, (total_price, total_price))
+        correct_category = cursor.fetchone()
+        if correct_category:
+            price_category_id = correct_category["id"]
+    
     # Добавляем сборку
     cursor.execute("""
         INSERT INTO pc_builds (name, device_type_id, price_category_id, total_price, description, image_url, link)
@@ -341,18 +360,19 @@ def add_test_data():
     conn.close()
     print("Тестовые данные добавлены в базу данных")
 
-def get_random_build() -> dict:
+def get_random_build(device_type_id, price_category_id) -> dict:
     """Получение случайной сборки со всеми компонентами"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Получаем случайную сборку
+    # Получаем случайную сборку с учетом типа устройства и ценовой категории
     cursor.execute("""
         SELECT id, name, device_type_id, price_category_id, total_price, description, link
         FROM pc_builds
+        WHERE device_type_id = ? AND price_category_id = ?
         ORDER BY RANDOM()
         LIMIT 1
-    """)
+    """, (device_type_id, price_category_id))
     build = cursor.fetchone()
     
     if not build:
@@ -1037,55 +1057,314 @@ def add_dns_build_4():
         component_ids=component_ids
     )
 
+def add_dns_build_5():
+    """Добавление новой бюджетной игровой сборки из DNS"""
+    # Сначала добавляем компоненты
+    components = [
+        {
+            'name': 'AMD Ryzen 5 5600 OEM',
+            'category_id': 1,  # Процессоры
+            'price': 8099,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Процессор AMD Ryzen 5 5600 OEM [AM4, 6 x 3.5 ГГц, L2 - 3 МБ, L3 - 32 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]',
+            'specs': {
+                'socket': 'AM4',
+                'cores': 6,
+                'clock': '3.5 ГГц',
+                'l2_cache': '3 МБ',
+                'l3_cache': '32 МБ',
+                'memory_type': 'DDR4-3200 МГц',
+                'tdp': '65 Вт'
+            }
+        },
+        {
+            'name': 'GIGABYTE B550M K',
+            'category_id': 5,  # Материнские платы
+            'price': 6299,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Материнская плата GIGABYTE B550M K [AM4, AMD B550, 4xDDR4-3200 МГц, 1xPCI-Ex16, 2xM.2, Micro-ATX]',
+            'specs': {
+                'socket': 'AM4',
+                'chipset': 'AMD B550',
+                'memory_slots': 4,
+                'memory_type': 'DDR4-3200 МГц',
+                'pcie_slots': '1xPCI-Ex16',
+                'm2_slots': 2,
+                'form_factor': 'Micro-ATX'
+            }
+        },
+        {
+            'name': 'PowerColor AMD Radeon RX 6600 Fighter',
+            'category_id': 2,  # Видеокарты
+            'price': 22999,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Видеокарта PowerColor AMD Radeon RX 6600 Fighter [AXRX 6600 8GBD6-3DH] [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 1626 МГц]',
+            'specs': {
+                'memory': '8 ГБ GDDR6',
+                'memory_bus': '128 бит',
+                'ports': '3 x DisplayPort, HDMI',
+                'gpu_clock': '1626 МГц',
+                'interface': 'PCIe 4.0'
+            }
+        },
+        {
+            'name': 'Kingston FURY Beast Black 32 ГБ',
+            'category_id': 3,  # Оперативная память
+            'price': 6399,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Оперативная память Kingston FURY Beast Black [KF432C16BB1K2/32] 32 ГБ [DDR4, 16 ГБx2 шт, 3200 МГц, 16(CL)-18-18]',
+            'specs': {
+                'capacity': '32 ГБ',
+                'modules': '16 ГБx2 шт',
+                'type': 'DDR4',
+                'speed': '3200 МГц',
+                'timings': '16(CL)-18-18'
+            }
+        },
+        {
+            'name': 'Tammuz GK300 120GB',
+            'category_id': 4,  # Накопители
+            'price': 850,
+            'price_category_id': 1,  # Бюджетный
+            'description': '120 ГБ 2.5" SATA накопитель Tammuz GK300 [TGK30120A58] [SATA, чтение - 500 Мбайт/сек, запись - 400 Мбайт/сек, 3D NAND 3 бит TLC]',
+            'specs': {
+                'capacity': '120 ГБ',
+                'interface': 'SATA',
+                'read_speed': '500 Мбайт/сек',
+                'write_speed': '400 Мбайт/сек',
+                'type': '3D NAND 3 бит TLC'
+            }
+        },
+        {
+            'name': 'DEEPCOOL PF500',
+            'category_id': 6,  # Блоки питания
+            'price': 2999,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Блок питания DEEPCOOL PF500 [R-PF500D-HA0B-EU] черный [500 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
+            'specs': {
+                'power': '500 Вт',
+                'efficiency': '80+',
+                'features': 'APFC',
+                'connectors': '20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
+            }
+        },
+        {
+            'name': 'ZALMAN N4 Rev.1',
+            'category_id': 8,  # Корпуса
+            'price': 4699,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Корпус ZALMAN N4 Rev.1 черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм]',
+            'specs': {
+                'form_factor': 'Mid-Tower',
+                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
+                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A',
+                'fans': 'FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм'
+            }
+        },
+        {
+            'name': 'DEEPCOOL AG400',
+            'category_id': 7,  # Охлаждение
+            'price': 1199,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Кулер для процессора DEEPCOOL AG400 [R-AG400-BKNNMN-G-1] [основание - алюминий\медь, 2000 об/мин, 31.6 дБ, 4 pin, 220 Вт]',
+            'specs': {
+                'base_material': 'алюминий\медь',
+                'fan_speed': '2000 об/мин',
+                'noise_level': '31.6 дБ',
+                'connector': '4 pin',
+                'tdp': '220 Вт'
+            }
+        },
+        {
+            'name': 'DEXP GS2',
+            'category_id': 7,  # Охлаждение
+            'price': 799,
+            'price_category_id': 1,  # Бюджетный
+            'description': 'Внешняя звуковая карта DEXP GS2 [формат звуковой карты 2.0, USB Type-A, 16 бит/48 кГц]',
+            'specs': {
+                'format': '2.0',
+                'interface': 'USB Type-A',
+                'resolution': '16 бит/48 кГц'
+            }
+        }
+    ]
+    
+    # Добавляем компоненты
+    component_ids = []
+    for component in components:
+        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
+        component_id = add_component(
+            name=component['name'],
+            category_id=component['category_id'],
+            price=component['price'],
+            price_category_id=component['price_category_id'],
+            description=component['description'],
+            specs=specs_json
+        )
+        component_ids.append(component_id)
+    
+    # Создаем сборку
+    return add_build(
+        name='Бюджетный игровой ПК DNS (Ryzen 5 5600 + RX 6600)',
+        device_type_id=1,  # Игровой ПК
+        price_category_id=1,  # Бюджетный
+        description='Бюджетный игровой ПК на базе процессора AMD Ryzen 5 5600 и видеокарты Radeon RX 6600. Отличный выбор для игр в разрешении 1080p.',
+        link='https://www.dns-shop.ru/user-pc/configuration/6a47e402a64339fe/',
+        component_ids=component_ids
+    )
+
+def add_dns_build_6():
+    """Добавление новой сборки с DNS"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Добавляем компоненты
+    components = [
+        ("AMD Ryzen 7 5700X OEM", 1, 11799, 3, "Процессор AMD Ryzen 7 5700X OEM [AM4, 8 x 3.4 ГГц, L2 - 4 МБ, L3 - 32 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]"),
+        ("GIGABYTE B550M DS3H", 5, 8299, 2, "Материнская плата GIGABYTE B550M DS3H [AM4, AMD B550, 4xDDR4-3200 МГц, 2xPCI-Ex16, 2xM.2, Micro-ATX]"),
+        ("MSI GeForce RTX 4060 Ti VENTUS 2X BLACK OC", 2, 40999, 3, "Видеокарта MSI GeForce RTX 4060 Ti VENTUS 2X BLACK OC [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 2310 МГц]"),
+        ("Kingston FURY Beast Black 64 ГБ", 3, 11399, 3, "Оперативная память Kingston FURY Beast Black [KF432C16BBK2/64] 64 ГБ [DDR4, 32 ГБx2 шт, 3200 МГц, 16(CL)-20-20]"),
+        ("ADATA LEGEND 800 1000 ГБ", 4, 4799, 2, "1000 ГБ M.2 NVMe накопитель ADATA LEGEND 800 [PCIe 4.0 x4, чтение - 3500 Мбайт/сек, запись - 2200 Мбайт/сек]"),
+        ("DEEPCOOL PF750", 6, 4399, 2, "Блок питания DEEPCOOL PF750 [750 Вт, 80+, APFC]"),
+        ("DEEPCOOL AG500 WH ARGB", 7, 2599, 2, "Кулер для процессора DEEPCOOL AG500 WH ARGB [основание - алюминий/медь, 1850 об/мин, 29.4 дБ]"),
+        ("ARDOR GAMING Rare Minicase MS3 Mesh WG ARGB", 8, 4399, 2, "Корпус ARDOR GAMING Rare Minicase MS3 Mesh WG ARGB белый [Mini-Tower, Micro-ATX, Mini-ITX]")
+    ]
+    
+    component_ids = []
+    for component in components:
+        cursor.execute("""
+            INSERT INTO components (name, category_id, price, price_category_id, description)
+            VALUES (?, ?, ?, ?, ?)
+        """, component)
+        component_ids.append(cursor.lastrowid)
+    
+    # Добавляем сборку
+    total_price = 88692
+    cursor.execute("""
+        INSERT INTO pc_builds (name, device_type_id, price_category_id, total_price, description, link)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        "Игровой ПК на AMD Ryzen 7 5700X и RTX 4060 Ti",
+        1,  # device_type_id = 1 (Игровой ПК)
+        3,  # price_category_id = 3 (Премиум)
+        total_price,
+        "Мощная игровая сборка на базе процессора AMD Ryzen 7 5700X и видеокарты RTX 4060 Ti",
+        "https://www.dns-shop.ru/user-pc/configuration/ccddb366723426c1/"
+    ))
+    
+    build_id = cursor.lastrowid
+    
+    # Связываем компоненты со сборкой
+    for component_id in component_ids:
+        cursor.execute("""
+            INSERT INTO build_components (build_id, component_id)
+            VALUES (?, ?)
+        """, (build_id, component_id))
+    
+    conn.commit()
+    conn.close()
+    return build_id
+
 def init_basic_data():
     """Инициализация базовых данных (категории, типы устройств, ценовые категории)"""
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Добавляем типы устройств
-    device_types = [
-        (1, "Игровой ПК", "Компьютеры для игр с высокой производительностью"),
-        (2, "Рабочий ПК", "Компьютеры для работы и офисного использования"),
-        (3, "Ноутбук", "Портативные компьютеры")
-    ]
+    # Проверяем, есть ли уже данные в таблице device_types
+    cursor.execute("SELECT COUNT(*) FROM device_types")
+    if cursor.fetchone()[0] == 0:
+        # Добавляем типы устройств только если таблица пуста
+        device_types = [
+            (1, "Игровой ПК", "Компьютеры для игр с высокой производительностью"),
+            (2, "Офисный ПК", "Компьютеры для работы и офисного использования")
+        ]
+        cursor.executemany("""
+            INSERT INTO device_types (id, name, description)
+            VALUES (?, ?, ?)
+        """, device_types)
     
-    cursor.executemany("""
-        INSERT OR REPLACE INTO device_types (id, name, description)
-        VALUES (?, ?, ?)
-    """, device_types)
+    # Проверяем, есть ли уже данные в таблице price_categories
+    cursor.execute("SELECT COUNT(*) FROM price_categories")
+    if cursor.fetchone()[0] == 0:
+        # Добавляем ценовые категории только если таблица пуста
+        price_categories = [
+            (1, "Бюджетный", 0, 40000, "Недорогие решения до 40 тыс. рублей"),
+            (2, "Средний", 40000, 80000, "Сбалансированные решения от 40 до 80 тыс. рублей"),
+            (3, "Премиум", 80000, 500000, "Высокопроизводительные системы от 80 тыс. рублей")
+        ]
+        cursor.executemany("""
+            INSERT INTO price_categories (id, name, min_price, max_price, description)
+            VALUES (?, ?, ?, ?, ?)
+        """, price_categories)
     
-    # Добавляем ценовые категории
-    price_categories = [
-        (1, "Бюджетный", 0, 40000, "Недорогие решения до 40 тыс. рублей"),
-        (2, "Средний", 40000, 80000, "Сбалансированные решения от 40 до 80 тыс. рублей"),
-        (3, "Премиум", 80000, 500000, "Высокопроизводительные системы от 80 тыс. рублей")
-    ]
-    
-    cursor.executemany("""
-        INSERT OR REPLACE INTO price_categories (id, name, min_price, max_price, description)
-        VALUES (?, ?, ?, ?, ?)
-    """, price_categories)
-    
-    # Добавляем категории компонентов
-    component_categories = [
-        (1, "Процессоры", "Центральные процессоры (CPU)"),
-        (2, "Видеокарты", "Графические процессоры (GPU)"),
-        (3, "Оперативная память", "Модули памяти (RAM)"),
-        (4, "Накопители", "SSD и HDD накопители"),
-        (5, "Материнские платы", "Системные платы"),
-        (6, "Блоки питания", "Источники питания (PSU)"),
-        (7, "Охлаждение", "Системы охлаждения компонентов"),
-        (8, "Корпуса", "Компьютерные корпуса")
-    ]
-    
-    cursor.executemany("""
-        INSERT OR REPLACE INTO component_categories (id, name, description)
-        VALUES (?, ?, ?)
-    """, component_categories)
+    # Проверяем, есть ли уже данные в таблице component_categories
+    cursor.execute("SELECT COUNT(*) FROM component_categories")
+    if cursor.fetchone()[0] == 0:
+        # Добавляем категории компонентов только если таблица пуста
+        component_categories = [
+            (1, "Процессоры", "Центральные процессоры (CPU)"),
+            (2, "Видеокарты", "Графические процессоры (GPU)"),
+            (3, "Оперативная память", "Модули памяти (RAM)"),
+            (4, "Накопители", "SSD и HDD накопители"),
+            (5, "Материнские платы", "Системные платы"),
+            (6, "Блоки питания", "Источники питания (PSU)"),
+            (7, "Охлаждение", "Системы охлаждения компонентов"),
+            (8, "Корпуса", "Компьютерные корпуса")
+        ]
+        cursor.executemany("""
+            INSERT INTO component_categories (id, name, description)
+            VALUES (?, ?, ?)
+        """, component_categories)
     
     conn.commit()
     conn.close()
     print("Базовые данные инициализированы")
+
+def delete_build(build_id):
+    """Удаление сборки из базы данных"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Удаляем связи сборки с компонентами
+    cursor.execute("DELETE FROM build_components WHERE build_id = ?", (build_id,))
+    
+    # Удаляем саму сборку
+    cursor.execute("DELETE FROM pc_builds WHERE id = ?", (build_id,))
+    
+    conn.commit()
+    conn.close()
+
+def fix_price_categories():
+    """Исправление ценовых категорий для существующих сборок"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Получаем все сборки
+    cursor.execute("SELECT id, total_price FROM pc_builds")
+    builds = cursor.fetchall()
+    
+    # Для каждой сборки проверяем и исправляем ценовую категорию
+    for build in builds:
+        # Находим подходящую ценовую категорию
+        cursor.execute("""
+            SELECT id FROM price_categories 
+            WHERE min_price <= ? AND max_price >= ?
+            ORDER BY min_price
+            LIMIT 1
+        """, (build["total_price"], build["total_price"]))
+        correct_category = cursor.fetchone()
+        
+        if correct_category:
+            # Обновляем ценовую категорию сборки
+            cursor.execute("""
+                UPDATE pc_builds 
+                SET price_category_id = ? 
+                WHERE id = ?
+            """, (correct_category["id"], build["id"]))
+    
+    conn.commit()
+    conn.close()
+    print("Ценовые категории сборок исправлены")
 
 # Инициализация БД при импорте модуля
 init_db()

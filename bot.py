@@ -206,7 +206,10 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             ])
         
-        # Добавляем кнопку возврата
+        # Добавляем кнопку случайной сборки и возврата
+        keyboard.append([
+            InlineKeyboardButton("🎲 Случайная сборка", callback_data=f"random_build_{price_category_id}")
+        ])
         keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")])
         
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -244,6 +247,8 @@ async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message_text = f"*{build['name']}*\n\n"
     message_text += f"{build['description']}\n\n"
     message_text += f"*Цена:* {build['total_price']} руб.\n\n"
+    if build.get('link'):
+        message_text += f"[Открыть сборку в магазине]({build['link']})\n\n"
     message_text += "*Компоненты:*\n"
     
     for component in components:
@@ -535,9 +540,6 @@ async def show_random_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Получаем ID ценовой категории из callback_data
     price_category_id = int(query.data.split("_")[-1])
     
-    # Сохраняем выбор пользователя
-    user_states[user_id]["price_category_id"] = price_category_id
-    
     # Получаем случайную сборку из БД
     device_type_id = user_states[user_id]["device_type_id"]
     build_details = get_random_build(device_type_id, price_category_id)
@@ -552,42 +554,29 @@ async def show_random_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
     else:
-        build = build_details["build"]
-        components = build_details["components"]
-        
         # Формируем текст сообщения
-        message_text = f"*{build['name']}*\n\n"
-        message_text += f"{build['description']}\n\n"
-        message_text += f"*Цена:* {build['total_price']} руб.\n\n"
+        message_text = f"*{build_details['name']}*\n\n"
+        message_text += f"{build_details['description']}\n\n"
+        message_text += f"*Цена:* {build_details['total_price']} руб.\n\n"
         message_text += "*Компоненты:*\n"
         
-        for component in components:
+        for component in build_details['components']:
             message_text += f"- {component['name']} - {component['price']} руб.\n"
         
         # Создаем клавиатуру
         keyboard = [
-            [InlineKeyboardButton("🔄 Следующая сборка", callback_data=f"next_build_{price_category_id}")],
-            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]
+            [InlineKeyboardButton("🔄 Следующая случайная", callback_data=f"random_build_{price_category_id}")],
+            [InlineKeyboardButton("⬅️ К списку сборок", callback_data="back_to_builds")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # Если есть изображение, отправляем его
-        if build["image_url"]:
-            await query.message.reply_photo(
-                photo=build["image_url"],
-                caption=message_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
-            await query.message.delete()
-        else:
-            await query.edit_message_text(
-                text=message_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
+        await query.edit_message_text(
+            text=message_text,
+            parse_mode="Markdown",
+            reply_markup=reply_markup
+        )
     
-    return VIEWING_BUILDS
+    return VIEWING_BUILD_DETAILS
 
 async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопки 'Следующая сборка'"""
@@ -665,8 +654,9 @@ def main():
     application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
     application.add_handler(CallbackQueryHandler(back_handler, pattern="^back_to"))
     application.add_handler(CallbackQueryHandler(select_price_category, pattern="^device_type_"))
-    application.add_handler(CallbackQueryHandler(show_random_build, pattern="^price_category_"))
-    application.add_handler(CallbackQueryHandler(next_build, pattern="^next_build_"))
+    application.add_handler(CallbackQueryHandler(show_builds, pattern="^price_category_"))
+    application.add_handler(CallbackQueryHandler(show_build_details, pattern="^build_"))
+    application.add_handler(CallbackQueryHandler(show_random_build, pattern="^random_build_"))
     application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
     application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
     
