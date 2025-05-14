@@ -28,36 +28,30 @@ load_dotenv()
     VIEWING_COMPONENT_DETAILS,
 ) = range(9)
 
-# Словарь для хранения состояний пользователей
+
 user_states = {}
 
-# Настройка логирования
+
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# Получаем токен из переменной окружения
+
 TOKEN = os.environ.get("BOT_TOKEN")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
     user = update.effective_user
-    
-    # Сохраняем информацию о пользователе в базу данных
     conn = get_db_connection()
     cursor = conn.cursor()
-    
-    # Проверяем, существует ли пользователь в базе
     existing_user = cursor.execute(
         "SELECT * FROM users WHERE user_id = ?", 
         (user.id,)
     ).fetchone()
-    
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
     if not existing_user:
-        # Добавляем нового пользователя
         cursor.execute(
             """
             INSERT INTO users (user_id, username, first_name, last_name, registration_date, last_active)
@@ -66,16 +60,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             (user.id, user.username, user.first_name, user.last_name, current_time, current_time)
         )
     else:
-        # Обновляем время последней активности
         update_user_last_active(user.id)
-    
     conn.commit()
     conn.close()
-    
-    # Сбрасываем состояние пользователя
     user_states[user.id] = {}
-    
-    # Создаем клавиатуру
     keyboard = [
         [
             InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
@@ -83,30 +71,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [InlineKeyboardButton("❓ Помощь", callback_data="help")]
     ]
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await update.message.reply_text(
         f"Привет, {user.first_name}! 👋\n\n"
         "Я бот-помощник по сборке компьютеров. Я могу помочь тебе выбрать готовую сборку ПК или подобрать отдельные компоненты.\n\n"
         "Что ты хочешь сделать?",
         reply_markup=reply_markup
     )
-    
     return SELECTING_MAIN_MENU
+
 
 async def build_pc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора сборки ПК"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем типы устройств из БД
     device_types = get_device_types()
-    
-    # Создаем клавиатуру с типами устройств
     keyboard = []
     for device_type in device_types:
         keyboard.append([
@@ -115,18 +96,14 @@ async def build_pc(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"device_type_{device_type['id']}"
             )
         ])
-    
-    # Добавляем кнопку возврата
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")])
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await query.edit_message_text(
         "Выберите тип устройства:",
         reply_markup=reply_markup
     )
-    
     return SELECTING_DEVICE_TYPE
+
 
 async def select_price_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик выбора ценовой категории"""
@@ -139,34 +116,26 @@ async def select_price_category(update: Update, context: ContextTypes.DEFAULT_TY
     price_categories = get_price_categories()
     keyboard = []
     for price_category in price_categories:
-        # Форматируем цены с разделителями тысяч
         min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
         max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
-        
-        # Для премиум категории отображаем "от"
         if price_category["id"] == 3:
             price_text = f"{price_category['name']} (от {min_price} ₽)"
         else:
             price_text = f"{price_category['name']} ({min_price} - {max_price} ₽)"
-            
         keyboard.append([
             InlineKeyboardButton(
                 price_text, 
                 callback_data=f"price_category_{price_category['id']}"
             )
         ])
-    
-    # Добавляем кнопку возврата
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_device")])
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await query.edit_message_text(
         "Выберите ценовую категорию:",
         reply_markup=reply_markup
     )
-    
     return SELECTING_PRICE_CATEGORY
+
 
 async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отображения сборок"""
@@ -175,28 +144,18 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID ценовой категории из callback_data
     price_category_id = int(query.data.split("_")[-1])
-    
-    # Сохраняем выбор пользователя
     user_states[user_id]["price_category_id"] = price_category_id
-    
-    # Получаем сборки из БД
     device_type_id = user_states[user_id]["device_type_id"]
     builds = get_builds_by_type_and_price(device_type_id, price_category_id)
-    
     if not builds:
-        # Если сборок нет, показываем сообщение
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             "К сожалению, сборок по заданным параметрам не найдено.",
             reply_markup=reply_markup
         )
     else:
-        # Создаем клавиатуру со сборками
         keyboard = []
         for build in builds:
             keyboard.append([
@@ -205,59 +164,41 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     callback_data=f"build_{build['id']}"
                 )
             ])
-        
-        # Добавляем кнопку случайной сборки и возврата
         keyboard.append([
             InlineKeyboardButton("🎲 Случайная сборка", callback_data=f"random_build_{price_category_id}")
         ])
         keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")])
-        
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             "Доступные сборки:",
             reply_markup=reply_markup
         )
-    
     return VIEWING_BUILDS
+
 
 async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отображения деталей сборки"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID сборки из callback_data
     build_id = int(query.data.split("_")[-1])
-    
-    # Получаем детали сборки из БД
     build_details = get_build_details(build_id)
-    
     if not build_details:
-        # Если сборка не найдена, возвращаемся к списку
         await show_builds(update, context)
         return VIEWING_BUILDS
-    
     build = build_details["build"]
     components = build_details["components"]
-    
-    # Формируем текст сообщения
     message_text = f"*{build['name']}*\n\n"
     message_text += f"{build['description']}\n\n"
     message_text += f"*Цена:* {build['total_price']} руб.\n\n"
     if build.get('link'):
         message_text += f"[Открыть сборку в магазине]({build['link']})\n\n"
     message_text += "*Компоненты:*\n"
-    
     for component in components:
         message_text += f"- {component['name']} - {component['price']} руб.\n"
-    # Создаем клавиатуру
     keyboard = [[InlineKeyboardButton("⬅️ Назад к списку", callback_data="back_to_builds")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Если есть изображение, отправляем его
     if build["image_url"]:
         await query.message.reply_photo(
             photo=build["image_url"],
@@ -281,10 +222,7 @@ async def components_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    # Получаем категории компонентов из БД
     component_categories = get_component_categories()
-    
-    # Создаем клавиатуру с категориями
     keyboard = []
     for category in component_categories:
         keyboard.append([
@@ -293,35 +231,25 @@ async def components_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 callback_data=f"component_category_{category['id']}"
             )
         ])
-    
-    # Добавляем кнопку возврата
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")])
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     await query.edit_message_text(
         "Выберите категорию компонентов:",
         reply_markup=reply_markup
     )
-    
     return SELECTING_COMPONENT_CATEGORY
+
 
 async def show_components(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отображения компонентов по категории"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID категории из callback_data
     category_id = int(query.data.split("_")[-1])
-    # Сохраняем выбор пользователя
     user_states[user_id]["component_category_id"] = category_id
-    # компоненты из БД
     components = get_components_by_category(category_id)
     if not components:
-        # компонентов нет, сообщение
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_categories")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
@@ -329,7 +257,6 @@ async def show_components(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
     else:
-        #  клавиатура с компонентами
         keyboard = []
         for component in components:
             keyboard.append([
@@ -379,7 +306,6 @@ async def show_component_details(update: Update, context: ContextTypes.DEFAULT_T
             parse_mode="Markdown",
             reply_markup=reply_markup
         )
-    
     return VIEWING_COMPONENT_DETAILS
 
 
@@ -496,19 +422,12 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return VIEWING_BUILDS
         else:
             return await build_pc(update, context)
-            
     elif action == "back_to_categories":
-        # Возврат к категориям компонентов
         return await components_menu(update, context)
-        
     elif action == "back_to_components":
-        # Возврат к списку компонентов
         if user_id in user_states and "component_category_id" in user_states[user_id]:
             category_id = user_states[user_id]["component_category_id"]
-            
-            # Получаем компоненты из БД
             components = get_components_by_category(category_id)
-            
             keyboard = []
             for component in components:
                 keyboard.append([
@@ -517,10 +436,8 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         callback_data=f"component_{component['id']}"
                     )
                 ])
-            
             keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_categories")])
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
             await query.edit_message_text(
                 "Доступные компоненты:",
                 reply_markup=reply_markup
@@ -529,54 +446,42 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return await components_menu(update, context)
 
+
 async def show_random_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отображения случайной сборки"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID ценовой категории из callback_data
     price_category_id = int(query.data.split("_")[-1])
-    
-    # Получаем случайную сборку из БД
     device_type_id = user_states[user_id]["device_type_id"]
     build_details = get_random_build(device_type_id, price_category_id)
-    
     if not build_details:
-        # Если сборок нет, показываем сообщение
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             "К сожалению, сборок по заданным параметрам не найдено.",
             reply_markup=reply_markup
         )
     else:
-        # Формируем текст сообщения
         message_text = f"*{build_details['name']}*\n\n"
         message_text += f"{build_details['description']}\n\n"
         message_text += f"*Цена:* {build_details['total_price']} руб.\n\n"
         message_text += "*Компоненты:*\n"
-        
         for component in build_details['components']:
             message_text += f"- {component['name']} - {component['price']} руб.\n"
-        
-        # Создаем клавиатуру
         keyboard = [
             [InlineKeyboardButton("🔄 Следующая случайная", callback_data=f"random_build_{price_category_id}")],
             [InlineKeyboardButton("⬅️ К списку сборок", callback_data="back_to_builds")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             text=message_text,
             parse_mode="Markdown",
             reply_markup=reply_markup
         )
-    
     return VIEWING_BUILD_DETAILS
+
 
 async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик кнопки 'Следующая сборка'"""
@@ -585,19 +490,12 @@ async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = update.effective_user.id
     update_user_last_active(user_id)
-    
-    # Получаем ID ценовой категории из callback_data
     price_category_id = int(query.data.split("_")[-1])
-    
-    # Получаем случайную сборку из БД
     device_type_id = user_states[user_id]["device_type_id"]
     build_details = get_random_build(device_type_id, price_category_id)
-    
     if not build_details:
-        # Если сборок нет, показываем сообщение
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await query.edit_message_text(
             "К сожалению, сборок по заданным параметрам не найдено.",
             reply_markup=reply_markup
@@ -605,24 +503,17 @@ async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         build = build_details["build"]
         components = build_details["components"]
-        
-        # Формируем текст сообщения
         message_text = f"*{build['name']}*\n\n"
         message_text += f"{build['description']}\n\n"
         message_text += f"*Цена:* {build['total_price']} руб.\n\n"
         message_text += "*Компоненты:*\n"
-        
         for component in components:
             message_text += f"- {component['name']} - {component['price']} руб.\n"
-        
-        # Создаем клавиатуру
         keyboard = [
             [InlineKeyboardButton("🔄 Следующая сборка", callback_data=f"next_build_{price_category_id}")],
             [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Если есть изображение, отправляем его
         if build["image_url"]:
             await query.message.reply_photo(
                 photo=build["image_url"],
@@ -637,18 +528,14 @@ async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown",
                 reply_markup=reply_markup
             )
-    
     return VIEWING_BUILDS
+
 
 def main():
     """Запуск бота"""
     application = ApplicationBuilder().token(TOKEN).build()
-    
-    # Добавляем обработчики
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    
-    # Обработчики для кнопок
     application.add_handler(CallbackQueryHandler(build_pc, pattern="^build_pc$"))
     application.add_handler(CallbackQueryHandler(components_menu, pattern="^components$"))
     application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
@@ -659,8 +546,6 @@ def main():
     application.add_handler(CallbackQueryHandler(show_random_build, pattern="^random_build_"))
     application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
     application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
-    
-    # Запускаем бота
     application.run_polling()
 
     
