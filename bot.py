@@ -8,7 +8,7 @@ from database import (
     get_db_connection, update_user_last_active, get_device_types,
     get_price_categories, get_component_categories, get_build_details,
     get_builds_by_type_and_price, get_components_by_category, get_component_details,
-    get_random_build
+    get_random_build, add_suggestion, get_user_suggestions
 )
 import json
 
@@ -64,21 +64,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn.commit()
     conn.close()
     user_states[user.id] = {}
-    keyboard = [
+    inline_keyboard = [
         [
             InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
             InlineKeyboardButton("🔧 Компоненты", callback_data="components")
         ],
-        [InlineKeyboardButton("❓ Помощь", callback_data="help")]
+        [
+            InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
+            InlineKeyboardButton("❓ Помощь", callback_data="help")
+        ]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    inline_reply_markup = InlineKeyboardMarkup(inline_keyboard)
+    reply_keyboard = [[KeyboardButton("Старт")]]
+    reply_markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     await update.message.reply_text(
         f"Привет, {user.first_name}! 👋\n\n"
         "Я бот-помощник по сборке компьютеров. Я могу помочь тебе выбрать готовую сборку ПК или подобрать отдельные компоненты.\n\n"
         "Что ты хочешь сделать?",
-        reply_markup=reply_markup
+        reply_markup=inline_reply_markup
     )
     return SELECTING_MAIN_MENU
+
+
+async def handle_start_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстового сообщения 'Старт'"""
+    if update.message.text.lower() == "старт":
+        return await start(update, context)
+    return None
 
 
 async def build_pc(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -141,7 +153,6 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик отображения сборок"""
     query = update.callback_query
     await query.answer()
-    
     user_id = update.effective_user.id
     update_user_last_active(user_id)
     price_category_id = int(query.data.split("_")[-1])
@@ -340,6 +351,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "*Основные команды:*\n"
             "/start - Запустить бота и открыть главное меню\n"
             "/help - Показать эту справку\n\n"
+            "/suggest - Отправить предложение по улучшению бота\n"
+            "/my_suggestions - Показать ваши предложения\n\n"
             "*Как пользоваться:*\n"
             "1. В главном меню выберите 'Собрать ПК' или 'Компоненты'\n"
             "2. Следуйте инструкциям на экране для выбора нужных параметров\n"
@@ -348,6 +361,132 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
             reply_markup=reply_markup
         )
+
+
+async def handle_suggestion(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text
+    if not text.startswith('/suggest'):
+        return
+    suggestion_text = text.replace('/suggest', '').strip()
+    if not suggestion_text:
+        await update.message.reply_text(
+            "Пожалуйста, введите ваше предложение после команды /suggest.\n"
+            "Например: /suggest Добавьте новые сборки для игр"
+        )
+        return
+    suggestion_id = add_suggestion(user.id, suggestion_text)
+    await update.message.reply_text(
+        f"Ваше предложение было отправлено с ID: {suggestion_id}\n"
+    )
+
+
+async def show_my_suggestions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    suggestions = get_user_suggestions(user.id)
+    if not suggestions:
+        await update.message.reply_text(
+            "У вас пока нет предложений."
+        )
+        return
+    message = "Ваши предложения:\n"
+    for suggestion in suggestions:
+        status = {
+            'new': 'Новое',
+            'in_progress': 'В процессе',
+            'completed': 'Выполнено',
+            'rejected': 'Отклонено'
+        }.get(suggestion['status'], suggestion['status'])
+        message += f"ID: {suggestion['id']}\n"
+        message += f"Предложение: {suggestion['suggestion_text']}\n"
+        message += f"Статус: {status}\n"
+        message += f"Дата: {suggestion['created_at']}\n\n"
+    await update.message.reply_text(message)
+
+
+async def suggestions_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик меню предложений"""
+    query = update.callback_query
+    await query.answer()
+    user = update.effective_user
+    
+    keyboard = [
+        [InlineKeyboardButton("📝 Отправить предложение", callback_data="new_suggestion")],
+        [InlineKeyboardButton("📋 Мои предложения", callback_data="my_suggestions")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "💡 *Меню предложений*\n\n"
+        "Здесь вы можете:\n"
+        "• Отправить новое предложение\n"
+        "• Просмотреть свои предложения\n\n"
+        "Выберите действие:",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+
+
+async def new_suggestion_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик создания нового предложения"""
+    query = update.callback_query
+    await query.answer()
+    
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="suggestions")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "📝 *Отправка предложения*\n\n"
+        "Используйте команду /suggest и напишите ваше предложение\n"
+        "Например:\n"
+        "/suggest Добавить новые сборки для игр\n"
+        "/suggest Улучшить интерфейс бота\n\n"
+        "Ваши предложения помогут сделать бота лучше!",
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
+
+
+async def show_my_suggestions_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопки 'Мои предложения'"""
+    query = update.callback_query
+    await query.answer()
+    user = update.effective_user
+    
+    suggestions = get_user_suggestions(user.id)
+    if not suggestions:
+        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="suggestions")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(
+            "У вас пока нет предложений.\n\n"
+            "Чтобы отправить предложение, используйте команду /suggest",
+            reply_markup=reply_markup
+        )
+        return
+    
+    message = "📋 *Ваши предложения:*\n\n"
+    for suggestion in suggestions:
+        status = {
+            'new': '🆕 Новое',
+            'in_progress': '⏳ В процессе',
+            'completed': '✅ Выполнено',
+            'rejected': '❌ Отклонено'
+        }.get(suggestion['status'], suggestion['status'])
+        
+        message += f"*ID:* {suggestion['id']}\n"
+        message += f"*Предложение:* {suggestion['suggestion_text']}\n"
+        message += f"*Статус:* {status}\n"
+        message += f"*Дата:* {suggestion['created_at']}\n\n"
+    
+    keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="suggestions")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        message,
+        parse_mode="Markdown",
+        reply_markup=reply_markup
+    )
 
 
 async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -362,7 +501,10 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
                 InlineKeyboardButton("🔧 Компоненты", callback_data="components")
             ],
-            [InlineKeyboardButton("❓ Помощь", callback_data="help")]
+            [
+                InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
+                InlineKeyboardButton("❓ Помощь", callback_data="help")
+            ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
@@ -370,6 +512,8 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup
         )
         return SELECTING_MAIN_MENU
+    elif action == "suggestions":
+        return await suggestions_menu(update, context)
     elif action == "back_to_device":
         return await build_pc(update, context)
     elif action == "back_to_price":
@@ -534,11 +678,18 @@ async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     """Запуск бота"""
     application = ApplicationBuilder().token(TOKEN).build()
+    # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("suggest", handle_suggestion))
+    application.add_handler(CommandHandler("my_suggestions", show_my_suggestions))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_start_text))
     application.add_handler(CallbackQueryHandler(build_pc, pattern="^build_pc$"))
     application.add_handler(CallbackQueryHandler(components_menu, pattern="^components$"))
     application.add_handler(CallbackQueryHandler(help_command, pattern="^help$"))
+    application.add_handler(CallbackQueryHandler(suggestions_menu, pattern="^suggestions$"))
+    application.add_handler(CallbackQueryHandler(new_suggestion_menu, pattern="^new_suggestion$"))
+    application.add_handler(CallbackQueryHandler(show_my_suggestions_menu, pattern="^my_suggestions$"))
     application.add_handler(CallbackQueryHandler(back_handler, pattern="^back_to"))
     application.add_handler(CallbackQueryHandler(select_price_category, pattern="^device_type_"))
     application.add_handler(CallbackQueryHandler(show_builds, pattern="^price_category_"))
@@ -546,16 +697,9 @@ def main():
     application.add_handler(CallbackQueryHandler(show_random_build, pattern="^random_build_"))
     application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
     application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
+    application.add_handler(CallbackQueryHandler(next_build, pattern="^next_build_"))
     application.run_polling()
 
     
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-

@@ -110,6 +110,17 @@ def init_db():
     )
     ''')
     
+    # Таблица для предложений пользователей
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS suggestions (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        suggestion_text TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        status TEXT
+    )
+    ''')
+    
     # Проверяем, нужно ли заполнить типы устройств
     cursor.execute("SELECT COUNT(*) FROM device_types")
     if cursor.fetchone()[0] == 0:
@@ -454,816 +465,6 @@ def search_page_data(query: str) -> list:
     conn.close()
     return [dict(page) for page in pages]
 
-def add_dns_build():
-    """Добавление сборки из DNS"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'Intel Core i5-12400F OEM',
-            'category_id': 1,  # Процессоры
-            'price': 9899,
-            'price_category_id': 2,  # Средний
-            'description': 'Процессор Intel Core i5-12400F OEM [LGA 1700, 6 x 2.5 ГГц, L2 - 7.5 МБ, L3 - 18 МБ, 2 х DDR4, DDR5-4800 МГц, TDP 117 Вт]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'cores': 6,
-                'threads': 12,
-                'base_clock': '2.5 ГГц',
-                'l2_cache': '7.5 МБ',
-                'l3_cache': '18 МБ',
-                'memory_type': 'DDR4, DDR5-4800 МГц',
-                'tdp': '117 Вт'
-            }
-        },
-        {
-            'name': 'GIGABYTE B760M DS3H DDR4',
-            'category_id': 5,  # Материнские платы
-            'price': 8499,
-            'price_category_id': 2,  # Средний
-            'description': 'Материнская плата GIGABYTE B760M DS3H DDR4 [LGA 1700, Intel B760, 4xDDR4-3200 МГц, 1xPCI-Ex16, 2xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'chipset': 'Intel B760',
-                'memory_slots': 4,
-                'memory_type': 'DDR4-3200 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 2,
-                'form_factor': 'Micro-ATX'
-            }
-        },
-        {
-            'name': 'KFA2 GeForce RTX 4060 CORE Black',
-            'category_id': 2,  # Видеокарты
-            'price': 31999,
-            'price_category_id': 2,  # Средний
-            'description': 'Видеокарта KFA2 GeForce RTX 4060 CORE Black [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 1830 МГц]',
-            'specs': {
-                'memory': '8 ГБ GDDR6',
-                'memory_bus': '128 бит',
-                'ports': '3 x DisplayPort, HDMI',
-                'gpu_clock': '1830 МГц',
-                'interface': 'PCIe 4.0'
-            }
-        },
-        {
-            'name': 'Kingston FURY Beast Black 32 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 6899,
-            'price_category_id': 2,  # Средний
-            'description': 'Оперативная память Kingston FURY Beast Black [KF432C16BBK2/32] 32 ГБ [DDR4, 16 ГБx2 шт, 3200 МГц, 16(CL)-20-20]',
-            'specs': {
-                'capacity': '32 ГБ',
-                'modules': '16 ГБx2 шт',
-                'type': 'DDR4',
-                'speed': '3200 МГц',
-                'timings': '16(CL)-20-20'
-            }
-        },
-        {
-            'name': 'ADATA XPG GAMMIX S11 Pro 1TB',
-            'category_id': 4,  # Накопители
-            'price': 5799,
-            'price_category_id': 2,  # Средний
-            'description': '1000 ГБ M.2 NVMe накопитель ADATA XPG GAMMIX S11 Pro [PCIe 3.0 x4, чтение - 3500 Мбайт/сек, запись - 3000 Мбайт/сек, 3 бит TLC, NVM Express, TBW - 640 ТБ]',
-            'specs': {
-                'capacity': '1000 ГБ',
-                'interface': 'PCIe 3.0 x4',
-                'read_speed': '3500 Мбайт/сек',
-                'write_speed': '3000 Мбайт/сек',
-                'type': '3 бит TLC',
-                'tbw': '640 ТБ'
-            }
-        },
-        {
-            'name': 'DEEPCOOL PF750',
-            'category_id': 6,  # Блоки питания
-            'price': 4999,
-            'price_category_id': 2,  # Средний
-            'description': 'Блок питания DEEPCOOL PF750 [R-PF750D-HA0B-EU] черный [750 Вт, 80+, APFC, 20+4 pin, 2 x 4+4 pin CPU, 6 SATA, 4 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '750 Вт',
-                'efficiency': '80+',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 2 x 4+4 pin CPU, 6 SATA, 4 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'Cougar FV150 RGB',
-            'category_id': 8,  # Корпуса
-            'price': 7999,
-            'price_category_id': 2,  # Средний
-            'description': 'Корпус Cougar FV150 RGB [FV150 RGB black] черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 3.2 Gen 1 Type-A, USB 3.2 Gen 2 Type-C, ARGB вентиляторы, 4 x 120 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
-                'usb_ports': 'USB 3.2 Gen 1 Type-A, USB 3.2 Gen 2 Type-C',
-                'fans': 'ARGB вентиляторы, 4 x 120 мм'
-            }
-        },
-        {
-            'name': 'DEEPCOOL AG300 MARRS',
-            'category_id': 7,  # Охлаждение
-            'price': 1250,
-            'price_category_id': 2,  # Средний
-            'description': 'Кулер для процессора DEEPCOOL AG300 MARRS [R-AG300-BKMNMN-G] [основание - алюминий\медь, 3050 об/мин, 30.5 дБ, 4 pin, 150 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '3050 об/мин',
-                'noise_level': '30.5 дБ',
-                'connector': '4 pin',
-                'tdp': '150 Вт'
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Игровой ПК DNS (i5-12400F + RTX 4060)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=2,  # Средний
-        description='Сбалансированный игровой ПК на базе процессора Intel Core i5-12400F и видеокарты RTX 4060. Отличный выбор для современных игр в разрешении 1080p.',
-        link='https://www.dns-shop.ru/configurator/',
-        component_ids=component_ids
-    )
-
-def add_dns_build_2():
-    """Добавление новой сборки из DNS"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'Intel Core i5-13400F OEM',
-            'category_id': 1,  # Процессоры
-            'price': 11399,
-            'price_category_id': 2,  # Средний
-            'description': 'Процессор Intel Core i5-13400F OEM [LGA 1700, 6P x 2.5 ГГц, 4E x 1.8 ГГц, L2 - 9.5 МБ, L3 - 20 МБ, 2 х DDR4, DDR5-4800 МГц, TDP 148 Вт]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'p_cores': 6,
-                'e_cores': 4,
-                'p_clock': '2.5 ГГц',
-                'e_clock': '1.8 ГГц',
-                'l2_cache': '9.5 МБ',
-                'l3_cache': '20 МБ',
-                'memory_type': 'DDR4, DDR5-4800 МГц',
-                'tdp': '148 Вт'
-            }
-        },
-        {
-            'name': 'MSI B760 GAMING PLUS WIFI',
-            'category_id': 5,  # Материнские платы
-            'price': 13299,
-            'price_category_id': 2,  # Средний
-            'description': 'Материнская плата MSI B760 GAMING PLUS WIFI [LGA 1700, Intel B760, 4xDDR5-5600 МГц, 5xPCI-Ex16, 2xM.2, Standard-ATX]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'chipset': 'Intel B760',
-                'memory_slots': 4,
-                'memory_type': 'DDR5-5600 МГц',
-                'pcie_slots': '5xPCI-Ex16',
-                'm2_slots': 2,
-                'form_factor': 'Standard-ATX',
-                'wifi': True
-            }
-        },
-        {
-            'name': 'MSI GeForce RTX 4060 VENTUS 2X WHITE OC',
-            'category_id': 2,  # Видеокарты
-            'price': 33999,
-            'price_category_id': 2,  # Средний
-            'description': 'Видеокарта MSI GeForce RTX 4060 VENTUS 2X WHITE OC [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 1830 МГц]',
-            'specs': {
-                'memory': '8 ГБ GDDR6',
-                'memory_bus': '128 бит',
-                'ports': '3 x DisplayPort, HDMI',
-                'gpu_clock': '1830 МГц',
-                'interface': 'PCIe 4.0'
-            }
-        },
-        {
-            'name': 'ADATA XPG Lancer Blade RGB 32 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 10499,
-            'price_category_id': 2,  # Средний
-            'description': 'Оперативная память ADATA XPG Lancer Blade RGB [AX5U6000C3016G-DTLABRBK] 32 ГБ [DDR5, 16 ГБx2 шт, 6000 МГц, 30(CL)-40-40]',
-            'specs': {
-                'capacity': '32 ГБ',
-                'modules': '16 ГБx2 шт',
-                'type': 'DDR5',
-                'speed': '6000 МГц',
-                'timings': '30(CL)-40-40',
-                'rgb': True
-            }
-        },
-        {
-            'name': 'ADATA LEGEND 960 MAX 1TB',
-            'category_id': 4,  # Накопители
-            'price': 8799,
-            'price_category_id': 2,  # Средний
-            'description': '1000 ГБ M.2 NVMe накопитель ADATA LEGEND 960 MAX [ALEG-960M-1TCS] [PCIe 4.0 x4, чтение - 7400 Мбайт/сек, запись - 6000 Мбайт/сек, NVM Express, TBW - 780 ТБ]',
-            'specs': {
-                'capacity': '1000 ГБ',
-                'interface': 'PCIe 4.0 x4',
-                'read_speed': '7400 Мбайт/сек',
-                'write_speed': '6000 Мбайт/сек',
-                'type': 'NVM Express',
-                'tbw': '780 ТБ'
-            }
-        },
-        {
-            'name': 'Cougar STX 700W',
-            'category_id': 6,  # Блоки питания
-            'price': 4499,
-            'price_category_id': 2,  # Средний
-            'description': 'Блок питания Cougar STX 700W [CGR ST-700] черный [700 Вт, 80+, APFC, 20+4 pin, 4+4 pin, 8 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '700 Вт',
-                'efficiency': '80+',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin, 8 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'Cougar Duoface Pro RGB White',
-            'category_id': 8,  # Корпуса
-            'price': 8599,
-            'price_category_id': 2,  # Средний
-            'description': 'Корпус Cougar Duoface Pro RGB White белый [Mid-Tower, E-ATX, Micro-ATX, Mini-ITX, SSI-CEB, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, USB 3.2 Gen 1 Type-C, ARGB вентиляторы, 4 x 120 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'E-ATX, Micro-ATX, Mini-ITX, SSI-CEB',
-                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, USB 3.2 Gen 1 Type-C',
-                'fans': 'ARGB вентиляторы, 4 x 120 мм'
-            }
-        },
-        {
-            'name': 'DEEPCOOL AK400 WH',
-            'category_id': 7,  # Охлаждение
-            'price': 2699,
-            'price_category_id': 2,  # Средний
-            'description': 'Кулер для процессора DEEPCOOL AK400 WH [R-AK400-WHNNMN-G-1] [основание - алюминий\медь, 1850 об/мин, 29 дБ, 4 pin, 220 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '1850 об/мин',
-                'noise_level': '29 дБ',
-                'connector': '4 pin',
-                'tdp': '220 Вт'
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Игровой ПК DNS (i5-13400F + RTX 4060)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=2,  # Средний
-        description='Мощный игровой ПК на базе процессора Intel Core i5-13400F и видеокарты RTX 4060. Отличный выбор для современных игр в разрешении 1080p и 1440p.',
-        link='https://www.dns-shop.ru/user-pc/configuration/1aa529f5cd09801a/',
-        component_ids=component_ids
-    )
-
-def add_dns_build_3():
-    """Добавление новой сборки из DNS с процессором AMD"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'AMD Ryzen 5 7500F OEM',
-            'category_id': 1,  # Процессоры
-            'price': 14299,
-            'price_category_id': 3,  # Премиум
-            'description': 'Процессор AMD Ryzen 5 7500F OEM [AM5, 6 x 3.7 ГГц, L2 - 6 МБ, L3 - 32 МБ, 2 х DDR5-5200 МГц, TDP 65 Вт]',
-            'specs': {
-                'socket': 'AM5',
-                'cores': 6,
-                'clock': '3.7 ГГц',
-                'l2_cache': '6 МБ',
-                'l3_cache': '32 МБ',
-                'memory_type': 'DDR5-5200 МГц',
-                'tdp': '65 Вт'
-            }
-        },
-        {
-            'name': 'MSI B650M GAMING PLUS WIFI',
-            'category_id': 5,  # Материнские платы
-            'price': 15999,
-            'price_category_id': 3,  # Премиум
-            'description': 'Материнская плата MSI B650M GAMING PLUS WIFI [AM5, AMD B650, 4xDDR5-4800 МГц, 1xPCI-Ex16, 2xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'AM5',
-                'chipset': 'AMD B650',
-                'memory_slots': 4,
-                'memory_type': 'DDR5-4800 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 2,
-                'form_factor': 'Micro-ATX',
-                'wifi': True
-            }
-        },
-        {
-            'name': 'Palit GeForce RTX 5070 Ti GamingPro',
-            'category_id': 2,  # Видеокарты
-            'price': 96999,
-            'price_category_id': 3,  # Премиум
-            'description': 'Видеокарта Palit GeForce RTX 5070 Ti GamingPro [PCIe 5.0 16 ГБ GDDR7, 256 бит, 3 x DisplayPort, HDMI, GPU 2295 МГц]',
-            'specs': {
-                'memory': '16 ГБ GDDR7',
-                'memory_bus': '256 бит',
-                'ports': '3 x DisplayPort, HDMI',
-                'gpu_clock': '2295 МГц',
-                'interface': 'PCIe 5.0'
-            }
-        },
-        {
-            'name': 'ADATA XPG Lancer Blade RGB 32 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 10499,
-            'price_category_id': 3,  # Премиум
-            'description': 'Оперативная память ADATA XPG Lancer Blade RGB [AX5U6000C3016G-DTLABRBK] 32 ГБ [DDR5, 16 ГБx2 шт, 6000 МГц, 30(CL)-40-40]',
-            'specs': {
-                'capacity': '32 ГБ',
-                'modules': '16 ГБx2 шт',
-                'type': 'DDR5',
-                'speed': '6000 МГц',
-                'timings': '30(CL)-40-40',
-                'rgb': True
-            }
-        },
-        {
-            'name': 'Kingston NV2 1TB',
-            'category_id': 4,  # Накопители
-            'price': 6799,
-            'price_category_id': 3,  # Премиум
-            'description': '1000 ГБ M.2 NVMe накопитель Kingston NV2 [SNV2S/1000G] [PCIe 4.0 x4, чтение - 3500 Мбайт/сек, запись - 2100 Мбайт/сек, 3 бит TLC, NVM Express, TBW - 320 ТБ]',
-            'specs': {
-                'capacity': '1000 ГБ',
-                'interface': 'PCIe 4.0 x4',
-                'read_speed': '3500 Мбайт/сек',
-                'write_speed': '2100 Мбайт/сек',
-                'type': '3 бит TLC',
-                'tbw': '320 ТБ'
-            }
-        },
-        {
-            'name': 'Cougar GEX X2 850',
-            'category_id': 6,  # Блоки питания
-            'price': 10999,
-            'price_category_id': 3,  # Премиум
-            'description': 'Блок питания Cougar GEX X2 850 [31GT085001P01] черный [850 Вт, 80+ Gold, APFC, 20+4 pin, 4+4 pin, 8 pin CPU, 10 SATA, 16 pin (12VHPWR), 4 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '850 Вт',
-                'efficiency': '80+ Gold',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin, 8 pin CPU, 10 SATA, 16 pin (12VHPWR), 4 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'Cougar FV150 RGB',
-            'category_id': 8,  # Корпуса
-            'price': 7999,
-            'price_category_id': 3,  # Премиум
-            'description': 'Корпус Cougar FV150 RGB [FV150 RGB black] черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 3.2 Gen 1 Type-A, USB 3.2 Gen 2 Type-C, ARGB вентиляторы, 4 x 120 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
-                'usb_ports': 'USB 3.2 Gen 1 Type-A, USB 3.2 Gen 2 Type-C',
-                'fans': 'ARGB вентиляторы, 4 x 120 мм'
-            }
-        },
-        {
-            'name': 'DEEPCOOL AK620 DIGITAL',
-            'category_id': 7,  # Охлаждение
-            'price': 6999,
-            'price_category_id': 3,  # Премиум
-            'description': 'Кулер для процессора DEEPCOOL AK620 DIGITAL [R-AK620-BKADMN-G] [основание - медь, 1850 об/мин, 28 дБ, 4 pin, 260 Вт]',
-            'specs': {
-                'base_material': 'медь',
-                'fan_speed': '1850 об/мин',
-                'noise_level': '28 дБ',
-                'connector': '4 pin',
-                'tdp': '260 Вт'
-            }
-        },
-        {
-            'name': 'ID-COOLING XF Series',
-            'category_id': 7,  # Охлаждение
-            'price': 1996,
-            'price_category_id': 3,  # Премиум
-            'description': 'Вентилятор ID-COOLING XF Series [XF-120-ARGB-K] [120 x 120 мм, 4 pin Male / 4 pin Female, 500 об/мин - 1500 об/мин, 13.8 дБ - 30.5 дБ, в комплекте - 1]',
-            'specs': {
-                'size': '120 x 120 мм',
-                'connector': '4 pin Male / 4 pin Female',
-                'speed_range': '500-1500 об/мин',
-                'noise_range': '13.8-30.5 дБ',
-                'rgb': True
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Игровой ПК DNS (Ryzen 5 7500F + RTX 5070 Ti)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=3,  # Премиум
-        description='Мощный игровой ПК на базе процессора AMD Ryzen 5 7500F и видеокарты RTX 5070 Ti. Отличный выбор для игр в разрешении 1440p и 4K.',
-        link='https://www.dns-shop.ru/user-pc/configuration/1aa529f5cd09801a/',
-        component_ids=component_ids
-    )
-
-def add_dns_build_4():
-    """Добавление новой бюджетной сборки из DNS"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'Intel Core i3-12100F OEM',
-            'category_id': 1,  # Процессоры
-            'price': 5099,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Процессор Intel Core i3-12100F OEM [LGA 1700, 4 x 3.3 ГГц, L2 - 5 МБ, L3 - 12 МБ, 2 х DDR4, DDR5-4800 МГц, TDP 89 Вт]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'cores': 4,
-                'clock': '3.3 ГГц',
-                'l2_cache': '5 МБ',
-                'l3_cache': '12 МБ',
-                'memory_type': 'DDR4, DDR5-4800 МГц',
-                'tdp': '89 Вт'
-            }
-        },
-        {
-            'name': 'MSI PRO H610M-E DDR4',
-            'category_id': 5,  # Материнские платы
-            'price': 5399,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Материнская плата MSI PRO H610M-E DDR4 [LGA 1700, Intel H610, 2xDDR4-3200 МГц, 1xPCI-Ex16, 1xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'LGA 1700',
-                'chipset': 'Intel H610',
-                'memory_slots': 2,
-                'memory_type': 'DDR4-3200 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 1,
-                'form_factor': 'Micro-ATX'
-            }
-        },
-        {
-            'name': 'INNO3D GeForce RTX 3050 TWIN X2 OC',
-            'category_id': 2,  # Видеокарты
-            'price': 21999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Видеокарта INNO3D GeForce RTX 3050 TWIN X2 OC [PCIe 4.0 8 ГБ GDDR6, 128 бит, DisplayPort, DVI-D, HDMI, GPU 1552 МГц]',
-            'specs': {
-                'memory': '8 ГБ GDDR6',
-                'memory_bus': '128 бит',
-                'ports': 'DisplayPort, DVI-D, HDMI',
-                'gpu_clock': '1552 МГц',
-                'interface': 'PCIe 4.0'
-            }
-        },
-        {
-            'name': 'ADATA XPG SPECTRIX D35G RGB 16 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 3599,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Оперативная память ADATA XPG SPECTRIX D35G RGB [AX4U32008G16A-DTBKD35G] 16 ГБ [DDR4, 8 ГБx2 шт, 3200 МГц, 16(CL)-20-20]',
-            'specs': {
-                'capacity': '16 ГБ',
-                'modules': '8 ГБx2 шт',
-                'type': 'DDR4',
-                'speed': '3200 МГц',
-                'timings': '16(CL)-20-20',
-                'rgb': True
-            }
-        },
-        {
-            'name': 'Apacer AS340 PANTHER 480GB',
-            'category_id': 4,  # Накопители
-            'price': 2550,
-            'price_category_id': 1,  # Бюджетный
-            'description': '480 ГБ 2.5" SATA накопитель Apacer AS340 PANTHER [AP480GAS340G-1] [SATA, чтение - 550 Мбайт/сек, запись - 520 Мбайт/сек, 3D NAND 3 бит TLC, TBW - 280 ТБ]',
-            'specs': {
-                'capacity': '480 ГБ',
-                'interface': 'SATA',
-                'read_speed': '550 Мбайт/сек',
-                'write_speed': '520 Мбайт/сек',
-                'type': '3D NAND 3 бит TLC',
-                'tbw': '280 ТБ'
-            }
-        },
-        {
-            'name': 'Cougar XTC600',
-            'category_id': 6,  # Блоки питания
-            'price': 3299,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Блок питания Cougar XTC600 [31XC060.0001P] черный [600 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '600 Вт',
-                'efficiency': '80+',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'ARDOR GAMING Rare Minicase MS2',
-            'category_id': 8,  # Корпуса
-            'price': 3999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Корпус ARDOR GAMING Rare Minicase MS2 черный [Mini-Tower, Micro-ATX, Mini-ITX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A]',
-            'specs': {
-                'form_factor': 'Mini-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX',
-                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A',
-                'fans': 'нет'
-            }
-        },
-        {
-            'name': 'ID-COOLING SE-903-XT ARGB',
-            'category_id': 7,  # Охлаждение
-            'price': 1099,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Кулер для процессора ID-COOLING SE-903-XT ARGB [SE-903-XT ARGB] [основание - алюминий\медь, 2200 об/мин, 25.8 дБ, 4 pin, 130 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '2200 об/мин',
-                'noise_level': '25.8 дБ',
-                'connector': '4 pin',
-                'tdp': '130 Вт',
-                'rgb': True
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Бюджетный игровой ПК DNS (i3-12100F + RTX 3050)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=1,  # Бюджетный
-        description='Бюджетный игровой ПК на базе процессора Intel Core i3-12100F и видеокарты RTX 3050. Отличный выбор для игр в разрешении 1080p.',
-        link='https://www.dns-shop.ru/user-pc/configuration/a32c15b219cf92ba/',
-        component_ids=component_ids
-    )
-
-def add_dns_build_5():
-    """Добавление новой бюджетной игровой сборки из DNS"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'AMD Ryzen 5 5600 OEM',
-            'category_id': 1,  # Процессоры
-            'price': 8099,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Процессор AMD Ryzen 5 5600 OEM [AM4, 6 x 3.5 ГГц, L2 - 3 МБ, L3 - 32 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]',
-            'specs': {
-                'socket': 'AM4',
-                'cores': 6,
-                'clock': '3.5 ГГц',
-                'l2_cache': '3 МБ',
-                'l3_cache': '32 МБ',
-                'memory_type': 'DDR4-3200 МГц',
-                'tdp': '65 Вт'
-            }
-        },
-        {
-            'name': 'GIGABYTE B550M K',
-            'category_id': 5,  # Материнские платы
-            'price': 6299,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Материнская плата GIGABYTE B550M K [AM4, AMD B550, 4xDDR4-3200 МГц, 1xPCI-Ex16, 2xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'AM4',
-                'chipset': 'AMD B550',
-                'memory_slots': 4,
-                'memory_type': 'DDR4-3200 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 2,
-                'form_factor': 'Micro-ATX'
-            }
-        },
-        {
-            'name': 'PowerColor AMD Radeon RX 6600 Fighter',
-            'category_id': 2,  # Видеокарты
-            'price': 22999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Видеокарта PowerColor AMD Radeon RX 6600 Fighter [AXRX 6600 8GBD6-3DH] [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 1626 МГц]',
-            'specs': {
-                'memory': '8 ГБ GDDR6',
-                'memory_bus': '128 бит',
-                'ports': '3 x DisplayPort, HDMI',
-                'gpu_clock': '1626 МГц',
-                'interface': 'PCIe 4.0'
-            }
-        },
-        {
-            'name': 'Kingston FURY Beast Black 32 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 6399,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Оперативная память Kingston FURY Beast Black [KF432C16BB1K2/32] 32 ГБ [DDR4, 16 ГБx2 шт, 3200 МГц, 16(CL)-18-18]',
-            'specs': {
-                'capacity': '32 ГБ',
-                'modules': '16 ГБx2 шт',
-                'type': 'DDR4',
-                'speed': '3200 МГц',
-                'timings': '16(CL)-18-18'
-            }
-        },
-        {
-            'name': 'Tammuz GK300 120GB',
-            'category_id': 4,  # Накопители
-            'price': 850,
-            'price_category_id': 1,  # Бюджетный
-            'description': '120 ГБ 2.5" SATA накопитель Tammuz GK300 [TGK30120A58] [SATA, чтение - 500 Мбайт/сек, запись - 400 Мбайт/сек, 3D NAND 3 бит TLC]',
-            'specs': {
-                'capacity': '120 ГБ',
-                'interface': 'SATA',
-                'read_speed': '500 Мбайт/сек',
-                'write_speed': '400 Мбайт/сек',
-                'type': '3D NAND 3 бит TLC'
-            }
-        },
-        {
-            'name': 'DEEPCOOL PF500',
-            'category_id': 6,  # Блоки питания
-            'price': 2999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Блок питания DEEPCOOL PF500 [R-PF500D-HA0B-EU] черный [500 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '500 Вт',
-                'efficiency': '80+',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'ZALMAN N4 Rev.1',
-            'category_id': 8,  # Корпуса
-            'price': 4699,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Корпус ZALMAN N4 Rev.1 черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
-                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A',
-                'fans': 'FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм'
-            }
-        },
-        {
-            'name': 'DEEPCOOL AG400',
-            'category_id': 7,  # Охлаждение
-            'price': 1199,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Кулер для процессора DEEPCOOL AG400 [R-AG400-BKNNMN-G-1] [основание - алюминий\медь, 2000 об/мин, 31.6 дБ, 4 pin, 220 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '2000 об/мин',
-                'noise_level': '31.6 дБ',
-                'connector': '4 pin',
-                'tdp': '220 Вт'
-            }
-        },
-        {
-            'name': 'DEXP GS2',
-            'category_id': 7,  # Охлаждение
-            'price': 799,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Внешняя звуковая карта DEXP GS2 [формат звуковой карты 2.0, USB Type-A, 16 бит/48 кГц]',
-            'specs': {
-                'format': '2.0',
-                'interface': 'USB Type-A',
-                'resolution': '16 бит/48 кГц'
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Бюджетный игровой ПК DNS (Ryzen 5 5600 + RX 6600)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=1,  # Бюджетный
-        description='Бюджетный игровой ПК на базе процессора AMD Ryzen 5 5600 и видеокарты Radeon RX 6600. Отличный выбор для игр в разрешении 1080p.',
-        link='https://www.dns-shop.ru/user-pc/configuration/6a47e402a64339fe/',
-        component_ids=component_ids
-    )
-
-def add_dns_build_6():
-    """Добавление новой сборки с DNS"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    # Добавляем компоненты
-    components = [
-        ("AMD Ryzen 7 5700X OEM", 1, 11799, 3, "Процессор AMD Ryzen 7 5700X OEM [AM4, 8 x 3.4 ГГц, L2 - 4 МБ, L3 - 32 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]"),
-        ("GIGABYTE B550M DS3H", 5, 8299, 2, "Материнская плата GIGABYTE B550M DS3H [AM4, AMD B550, 4xDDR4-3200 МГц, 2xPCI-Ex16, 2xM.2, Micro-ATX]"),
-        ("MSI GeForce RTX 4060 Ti VENTUS 2X BLACK OC", 2, 40999, 3, "Видеокарта MSI GeForce RTX 4060 Ti VENTUS 2X BLACK OC [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 2310 МГц]"),
-        ("Kingston FURY Beast Black 64 ГБ", 3, 11399, 3, "Оперативная память Kingston FURY Beast Black [KF432C16BBK2/64] 64 ГБ [DDR4, 32 ГБx2 шт, 3200 МГц, 16(CL)-20-20]"),
-        ("ADATA LEGEND 800 1000 ГБ", 4, 4799, 2, "1000 ГБ M.2 NVMe накопитель ADATA LEGEND 800 [PCIe 4.0 x4, чтение - 3500 Мбайт/сек, запись - 2200 Мбайт/сек]"),
-        ("DEEPCOOL PF750", 6, 4399, 2, "Блок питания DEEPCOOL PF750 [750 Вт, 80+, APFC]"),
-        ("DEEPCOOL AG500 WH ARGB", 7, 2599, 2, "Кулер для процессора DEEPCOOL AG500 WH ARGB [основание - алюминий/медь, 1850 об/мин, 29.4 дБ]"),
-        ("ARDOR GAMING Rare Minicase MS3 Mesh WG ARGB", 8, 4399, 2, "Корпус ARDOR GAMING Rare Minicase MS3 Mesh WG ARGB белый [Mini-Tower, Micro-ATX, Mini-ITX]")
-    ]
-    
-    component_ids = []
-    for component in components:
-        cursor.execute("""
-            INSERT INTO components (name, category_id, price, price_category_id, description)
-            VALUES (?, ?, ?, ?, ?)
-        """, component)
-        component_ids.append(cursor.lastrowid)
-    
-    # Добавляем сборку
-    total_price = 88692
-    cursor.execute("""
-        INSERT INTO pc_builds (name, device_type_id, price_category_id, total_price, description, link)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        "Игровой ПК на AMD Ryzen 7 5700X и RTX 4060 Ti",
-        1,  # device_type_id = 1 (Игровой ПК)
-        3,  # price_category_id = 3 (Премиум)
-        total_price,
-        "Мощная игровая сборка на базе процессора AMD Ryzen 7 5700X и видеокарты RTX 4060 Ti",
-        "https://www.dns-shop.ru/user-pc/configuration/ccddb366723426c1/"
-    ))
-    
-    build_id = cursor.lastrowid
-    
-    # Связываем компоненты со сборкой
-    for component_id in component_ids:
-        cursor.execute("""
-            INSERT INTO build_components (build_id, component_id)
-            VALUES (?, ?)
-        """, (build_id, component_id))
-    
-    conn.commit()
-    conn.close()
-    return build_id
 
 def init_basic_data():
     """Инициализация базовых данных (категории, типы устройств, ценовые категории)"""
@@ -1366,331 +567,104 @@ def fix_price_categories():
     conn.close()
     print("Ценовые категории сборок исправлены")
 
-def add_dns_build_7():
-    """Добавление новой сборки из DNS с AMD Ryzen 5 5600"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'AMD Ryzen 5 5600 OEM',
-            'category_id': 1,  # Процессоры
-            'price': 8099,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Процессор AMD Ryzen 5 5600 OEM [AM4, 6 x 3.5 ГГц, L2 - 3 МБ, L3 - 32 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]',
-            'specs': {
-                'socket': 'AM4',
-                'cores': 6,
-                'clock': '3.5 ГГц',
-                'l2_cache': '3 МБ',
-                'l3_cache': '32 МБ',
-                'memory_type': 'DDR4-3200 МГц',
-                'tdp': '65 Вт'
-            }
-        },
-        {
-            'name': 'GIGABYTE B550M K',
-            'category_id': 5,  # Материнские платы
-            'price': 6299,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Материнская плата GIGABYTE B550M K [AM4, AMD B550, 4xDDR4-3200 МГц, 1xPCI-Ex16, 2xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'AM4',
-                'chipset': 'AMD B550',
-                'memory_slots': 4,
-                'memory_type': 'DDR4-3200 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 2,
-                'form_factor': 'Micro-ATX'
-            }
-        },
-        {
-            'name': 'PowerColor AMD Radeon RX 6600 Fighter',
-            'category_id': 2,  # Видеокарты
-            'price': 22999,
-            'price_category_id': 2,  # Средний
-            'description': 'Видеокарта PowerColor AMD Radeon RX 6600 Fighter [AXRX 6600 8GBD6-3DH] [PCIe 4.0 8 ГБ GDDR6, 128 бит, 3 x DisplayPort, HDMI, GPU 1626 МГц]',
-            'specs': {
-                'interface': 'PCIe 4.0',
-                'memory': '8 ГБ GDDR6',
-                'memory_bus': '128 бит',
-                'ports': '3 x DisplayPort, HDMI',
-                'gpu_clock': '1626 МГц'
-            }
-        },
-        {
-            'name': 'Kingston FURY Beast Black 32 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 6399,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Оперативная память Kingston FURY Beast Black [KF432C16BB1K2/32] 32 ГБ [DDR4, 16 ГБx2 шт, 3200 МГц, 16(CL)-18-18]',
-            'specs': {
-                'type': 'DDR4',
-                'capacity': '32 ГБ (16 ГБx2)',
-                'speed': '3200 МГц',
-                'timings': '16-18-18'
-            }
-        },
-        {
-            'name': 'Tammuz GK300 120 ГБ',
-            'category_id': 4,  # Накопители
-            'price': 850,
-            'price_category_id': 1,  # Бюджетный
-            'description': '120 ГБ 2.5" SATA накопитель Tammuz GK300 [TGK30120A58] [SATA, чтение - 500 Мбайт/сек, запись - 400 Мбайт/сек, 3D NAND 3 бит TLC]',
-            'specs': {
-                'interface': 'SATA',
-                'capacity': '120 ГБ',
-                'read_speed': '500 Мбайт/сек',
-                'write_speed': '400 Мбайт/сек',
-                'memory_type': '3D NAND 3 бит TLC'
-            }
-        },
-        {
-            'name': 'DEEPCOOL PF500',
-            'category_id': 6,  # Блоки питания
-            'price': 2999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Блок питания DEEPCOOL PF500 [R-PF500D-HA0B-EU] черный [500 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '500 Вт',
-                'efficiency': '80+',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'ZALMAN N4 Rev.1',
-            'category_id': 8,  # Корпуса
-            'price': 4699,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Корпус ZALMAN N4 Rev.1 черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
-                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A',
-                'fans': 'FRGB вентиляторы, 3 x 120 мм, 3 x 140 мм'
-            }
-        },
-        {
-            'name': 'DEEPCOOL AG400',
-            'category_id': 7,  # Охлаждение
-            'price': 1199,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Кулер для процессора DEEPCOOL AG400 [R-AG400-BKNNMN-G-1] [основание - алюминий\медь, 2000 об/мин, 31.6 дБ, 4 pin, 220 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '2000 об/мин',
-                'noise_level': '31.6 дБ',
-                'connector': '4 pin',
-                'tdp': '220 Вт'
-            }
-        },
-        {
-            'name': 'DEXP GS2',
-            'category_id': 9,  # Звуковые карты
-            'price': 799,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Внешняя звуковая карта DEXP GS2 [формат звуковой карты 2.0, USB Type-A, 16 бит/48 кГц]',
-            'specs': {
-                'format': '2.0',
-                'interface': 'USB Type-A',
-                'resolution': '16 бит/48 кГц'
-            }
-        }
-    ]
+def copy_components_from_builds():
+    """Копирование компонентов из сборок в таблицу компонентов"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
     
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
+    # Получаем все сборки
+    cursor.execute("SELECT id FROM pc_builds")
+    builds = cursor.fetchall()
     
-    # Создаем сборку
-    return add_build(
-        name='Бюджетный игровой ПК DNS (Ryzen 5 5600 + RX 6600)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=1,  # Бюджетный
-        description='Бюджетный игровой ПК на базе процессора AMD Ryzen 5 5600 и видеокарты Radeon RX 6600. Отличный выбор для игр в разрешении 1080p.',
-        link='https://www.dns-shop.ru/user-pc/configuration/6a47e402a64339fe/',
-        component_ids=component_ids
-    )
+    for build in builds:
+        build_id = build[0]
+        # Получаем компоненты сборки
+        cursor.execute("""
+            SELECT c.* FROM components c
+            JOIN build_components bc ON c.id = bc.component_id
+            WHERE bc.build_id = ?
+        """, (build_id,))
+        components = cursor.fetchall()
+        
+        # Для каждого компонента проверяем, есть ли он уже в таблице components
+        for component in components:
+            cursor.execute("""
+                SELECT id FROM components 
+                WHERE name = ? AND category_id = ? AND price_category_id = ?
+            """, (component['name'], component['category_id'], component['price_category_id']))
+            existing = cursor.fetchone()
+            
+            if not existing:
+                # Если компонента нет, добавляем его
+                cursor.execute("""
+                    INSERT INTO components (name, category_id, price_category_id, price, description, specs, image_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    component['name'],
+                    component['category_id'],
+                    component['price_category_id'],
+                    component['price'],
+                    component['description'],
+                    component['specs'],
+                    component['image_url']
+                ))
+    
+    conn.commit()
+    conn.close()
 
-def add_dns_build_8():
-    """Добавление новой бюджетной сборки из DNS с AMD Ryzen 5 5500"""
-    # Сначала добавляем компоненты
-    components = [
-        {
-            'name': 'AMD Ryzen 5 5500 OEM',
-            'category_id': 1,  # Процессоры
-            'price': 6399,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Процессор AMD Ryzen 5 5500 OEM [AM4, 6 x 3.6 ГГц, L2 - 3 МБ, L3 - 16 МБ, 2 х DDR4-3200 МГц, TDP 65 Вт]',
-            'specs': {
-                'socket': 'AM4',
-                'cores': 6,
-                'clock': '3.6 ГГц',
-                'l2_cache': '3 МБ',
-                'l3_cache': '16 МБ',
-                'memory_type': 'DDR4-3200 МГц',
-                'tdp': '65 Вт'
-            }
-        },
-        {
-            'name': 'MSI A520M-A PRO',
-            'category_id': 5,  # Материнские платы
-            'price': 4499,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Материнская плата MSI A520M-A PRO [AM4, AMD A520, 2xDDR4-3200 МГц, 1xPCI-Ex16, 1xM.2, Micro-ATX]',
-            'specs': {
-                'socket': 'AM4',
-                'chipset': 'AMD A520',
-                'memory_slots': 2,
-                'memory_type': 'DDR4-3200 МГц',
-                'pcie_slots': '1xPCI-Ex16',
-                'm2_slots': 1,
-                'form_factor': 'Micro-ATX'
-            }
-        },
-        {
-            'name': 'ASRock AMD Radeon RX 6500 XT Phantom Gaming D OC',
-            'category_id': 2,  # Видеокарты
-            'price': 13999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Видеокарта ASRock AMD Radeon RX 6500 XT Phantom Gaming D OC [RX6500XT PGD 4GO] [PCIe 4.0 4 ГБ GDDR6, 64 бит, DisplayPort, HDMI, GPU 2365 МГц]',
-            'specs': {
-                'interface': 'PCIe 4.0',
-                'memory': '4 ГБ GDDR6',
-                'memory_bus': '64 бит',
-                'ports': 'DisplayPort, HDMI',
-                'gpu_clock': '2365 МГц'
-            }
-        },
-        {
-            'name': 'G.Skill Aegis 16 ГБ',
-            'category_id': 3,  # Оперативная память
-            'price': 2799,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Оперативная память G.Skill Aegis [F4-3200C16D-16GIS] 16 ГБ [DDR4, 8 ГБx2 шт, 3200 МГц, 16(CL)-18-18-38]',
-            'specs': {
-                'type': 'DDR4',
-                'capacity': '16 ГБ (8 ГБx2)',
-                'speed': '3200 МГц',
-                'timings': '16-18-18-38'
-            }
-        },
-        {
-            'name': 'Patriot P300 256 ГБ',
-            'category_id': 4,  # Накопители
-            'price': 1599,
-            'price_category_id': 1,  # Бюджетный
-            'description': '256 ГБ M.2 NVMe накопитель Patriot P300 [P300P256GM28] [PCIe 3.0 x4, чтение - 1700 Мбайт/сек, запись - 1100 Мбайт/сек, NVM Express, TBW - 120 ТБ]',
-            'specs': {
-                'interface': 'PCIe 3.0 x4',
-                'capacity': '256 ГБ',
-                'read_speed': '1700 Мбайт/сек',
-                'write_speed': '1100 Мбайт/сек',
-                'type': 'NVM Express',
-                'tbw': '120 ТБ'
-            }
-        },
-        {
-            'name': 'ADATA SU650 960 ГБ',
-            'category_id': 4,  # Накопители
-            'price': 4499,
-            'price_category_id': 1,  # Бюджетный
-            'description': '960 ГБ 2.5" SATA накопитель ADATA SU650 [ASU650SS-960GT-R] [SATA, чтение - 520 Мбайт/сек, запись - 450 Мбайт/сек, 3D NAND, TBW - 560 ТБ]',
-            'specs': {
-                'interface': 'SATA',
-                'capacity': '960 ГБ',
-                'read_speed': '520 Мбайт/сек',
-                'write_speed': '450 Мбайт/сек',
-                'type': '3D NAND',
-                'tbw': '560 ТБ'
-            }
-        },
-        {
-            'name': 'MONTECH BETA 550',
-            'category_id': 6,  # Блоки питания
-            'price': 3999,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Блок питания MONTECH BETA 550 [BETA 550] черный [550 Вт, 80+ Bronze, APFC, 20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E]',
-            'specs': {
-                'power': '550 Вт',
-                'efficiency': '80+ Bronze',
-                'features': 'APFC',
-                'connectors': '20+4 pin, 4+4 pin CPU, 6 SATA, 2 x 6+2 pin PCI-E'
-            }
-        },
-        {
-            'name': 'MONTECH FIGHTER 500',
-            'category_id': 8,  # Корпуса
-            'price': 4499,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Корпус MONTECH FIGHTER 500 черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A, FRGB вентиляторы, 4 x 120 мм]',
-            'specs': {
-                'form_factor': 'Mid-Tower',
-                'supported_motherboards': 'Micro-ATX, Mini-ITX, Standard-ATX',
-                'usb_ports': 'USB 2.0 Type-A, USB 3.2 Gen 1 Type-A',
-                'fans': 'FRGB вентиляторы, 4 x 120 мм'
-            }
-        },
-        {
-            'name': 'JONSBO CR-1000 EVO Color Black',
-            'category_id': 7,  # Охлаждение
-            'price': 1299,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Кулер для процессора JONSBO CR-1000 EVO Color Black [CR-1000 EVO Color] [основание - алюминий\медь, 1500 об/мин, 32 дБ, 4 pin, 220 Вт]',
-            'specs': {
-                'base_material': 'алюминий\медь',
-                'fan_speed': '1500 об/мин',
-                'noise_level': '32 дБ',
-                'connector': '4 pin',
-                'tdp': '220 Вт'
-            }
-        },
-        {
-            'name': 'Creative Sound Blaster PLAY! 3',
-            'category_id': 9,  # Звуковые карты
-            'price': 2499,
-            'price_category_id': 1,  # Бюджетный
-            'description': 'Внешняя звуковая карта Creative Sound Blaster PLAY! 3 [формат звуковой карты 2.0, USB Type-A, 24 бит/96 кГц]',
-            'specs': {
-                'format': '2.0',
-                'interface': 'USB Type-A',
-                'resolution': '24 бит/96 кГц'
-            }
-        }
-    ]
-    
-    # Добавляем компоненты
-    component_ids = []
-    for component in components:
-        specs_json = json.dumps(component.get('specs')) if component.get('specs') else None
-        component_id = add_component(
-            name=component['name'],
-            category_id=component['category_id'],
-            price=component['price'],
-            price_category_id=component['price_category_id'],
-            description=component['description'],
-            specs=specs_json
-        )
-        component_ids.append(component_id)
-    
-    # Создаем сборку
-    return add_build(
-        name='Бюджетный игровой ПК DNS (Ryzen 5 5500 + RX 6500 XT)',
-        device_type_id=1,  # Игровой ПК
-        price_category_id=1,  # Бюджетный
-        description='Бюджетный игровой ПК на базе процессора AMD Ryzen 5 5500 и видеокарты Radeon RX 6500 XT. Отличный выбор для игр в разрешении 1080p.',
-        link='https://www.dns-shop.ru/user-pc/configuration/14ac5c76afda620c/',
-        component_ids=component_ids
+def add_suggestion(user_id: int, suggestion_text: str) -> int:
+    """Добавляет новое предложение от пользователя"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO suggestions (user_id, suggestion_text) VALUES (?, ?)",
+        (user_id, suggestion_text)
     )
+    suggestion_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return suggestion_id
+
+def get_user_suggestions(user_id: int) -> list:
+    """Получает все предложения пользователя"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM suggestions WHERE user_id = ? ORDER BY created_at DESC",
+        (user_id,)
+    )
+    suggestions = cursor.fetchall()
+    conn.close()
+    return suggestions
+
+def get_all_suggestions() -> list:
+    """Получает все предложения для администратора"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT s.*, u.username, u.first_name, u.last_name 
+        FROM suggestions s 
+        JOIN users u ON s.user_id = u.user_id 
+        ORDER BY s.created_at DESC
+        """
+    )
+    suggestions = cursor.fetchall()
+    conn.close()
+    return suggestions
+
+def update_suggestion_status(suggestion_id: int, status: str) -> bool:
+    """Обновляет статус предложения"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE suggestions SET status = ? WHERE id = ?",
+        (status, suggestion_id)
+    )
+    success = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return success
 
 # Инициализация БД при импорте модуля
 init_db()
