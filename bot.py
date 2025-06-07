@@ -11,6 +11,12 @@ from database import (
     get_random_build, add_suggestion, get_user_suggestions
 )
 import json
+import ctypes
+import random
+import winreg
+from admin_panel import get_all_builds, get_all_components
+from playsound import playsound
+import asyncio
 
 
 load_dotenv()
@@ -30,6 +36,25 @@ load_dotenv()
 
 
 user_states = {}
+#def set_random_wallpaper_from_images():
+#    images_dir = os.path.join(os.path.dirname(__file__), "images")
+#    images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+#    if not images:
+#        return
+#    image_path = os.path.join(images_dir, random.choice(images))
+#    ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
+    
+#def rename_recycle_bin(new_name="ркорзина"):
+#    try:
+#        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\CLSID\{645FF040-5081-101B-9F08-00AA002F954E}"
+#        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE) as key:
+#            winreg.SetValueEx(key, None, 0, winreg.REG_SZ, new_name)
+#    except Exception as e:
+#        print(f"Ошибка при переименовании корзины: {e}")
+        
+        
+#set_random_wallpaper_from_images()
+#rename_recycle_bin("пенис")
 
 
 logging.basicConfig(
@@ -67,7 +92,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     inline_keyboard = [
         [
             InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
-            InlineKeyboardButton("🔧 Компоненты", callback_data="components")
+            InlineKeyboardButton("🔧 Компоненты", callback_data="components"),
+            InlineKeyboardButton("🎵 Обои+Песня", callback_data="wallpaper_and_song")
         ],
         [
             InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
@@ -100,11 +126,17 @@ async def build_pc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     update_user_last_active(user_id)
     device_types = get_device_types()
+    all_builds = get_all_builds()
+    # Считаем количество сборок для каждого типа
+    builds_count = {}
+    for build in all_builds:
+        builds_count[build['device_type_id']] = builds_count.get(build['device_type_id'], 0) + 1
     keyboard = []
     for device_type in device_types:
+        count = builds_count.get(device_type['id'], 0)
         keyboard.append([
             InlineKeyboardButton(
-                device_type["name"], 
+                f"{device_type['name']} ({count})", 
                 callback_data=f"device_type_{device_type['id']}"
             )
         ])
@@ -126,20 +158,37 @@ async def select_price_category(update: Update, context: ContextTypes.DEFAULT_TY
     device_type_id = int(query.data.split("_")[-1])
     user_states[user_id] = {"device_type_id": device_type_id}
     price_categories = get_price_categories()
+    # Получаем название типа устройства
+    device_types = get_device_types()
+    device_type_name = next((d['name'].lower() for d in device_types if d['id'] == device_type_id), "")
     keyboard = []
     for price_category in price_categories:
-        min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
-        max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
-        if price_category["id"] == 3:
-            price_text = f"{price_category['name']} (от {min_price} ₽)"
+        if device_type_name.startswith('офис'):
+            # Для офисного ПК только бюджетный
+            if price_category['name'].lower().startswith('бюджет'):
+                max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                price_text = f"{price_category['name']} (до {max_price} тыс. ₽)"
+                keyboard.append([
+                    InlineKeyboardButton(
+                        price_text, 
+                        callback_data=f"price_category_{price_category['id']}"
+                    )
+                ])
         else:
-            price_text = f"{price_category['name']} ({min_price} - {max_price} ₽)"
-        keyboard.append([
-            InlineKeyboardButton(
-                price_text, 
-                callback_data=f"price_category_{price_category['id']}"
-            )
-        ])
+            # Для остальных типов (игровой) — все категории
+            if price_category['name'].lower().startswith('бюджет'):
+                max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                price_text = f"{price_category['name']} (до {max_price} тыс. ₽)"
+            else:
+                min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
+                max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                price_text = f"{price_category['name']} (от {min_price} до {max_price} ₽)"
+            keyboard.append([
+                InlineKeyboardButton(
+                    price_text, 
+                    callback_data=f"price_category_{price_category['id']}"
+                )
+            ])
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_device")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
@@ -171,13 +220,10 @@ async def show_builds(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for build in builds:
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{build['name']} - {build['total_price']} руб.", 
+                    f"{build['name']}", 
                     callback_data=f"build_{build['id']}"
                 )
             ])
-        keyboard.append([
-            InlineKeyboardButton("🎲 Случайная сборка", callback_data=f"random_build_{price_category_id}")
-        ])
         keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
@@ -202,12 +248,12 @@ async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     components = build_details["components"]
     message_text = f"*{build['name']}*\n\n"
     message_text += f"{build['description']}\n\n"
-    message_text += f"*Цена:* {build['total_price']} руб.\n\n"
-    if build.get('link'):
-        message_text += f"[Открыть сборку в магазине]({build['link']})\n\n"
     message_text += "*Компоненты:*\n"
     for component in components:
-        message_text += f"- {component['name']} - {component['price']} руб.\n"
+        message_text += f"- {component['name']}\n"
+    if build.get('link'):
+        message_text += "\n*ДЛЯ УТОЧНЕНИЯ ЦЕНЫ ПЕРЕЙДИТЕ ПО ССЫЛКЕ:*\n"
+        message_text += f"[Открыть сборку в магазине]({build['link']})\n"
     keyboard = [[InlineKeyboardButton("⬅️ Назад к списку", callback_data="back_to_builds")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if build["image_url"]:
@@ -234,11 +280,17 @@ async def components_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     update_user_last_active(user_id)
     component_categories = get_component_categories()
+    all_components = get_all_components()
+    # Считаем количество комплектующих для каждой категории
+    components_count = {}
+    for comp in all_components:
+        components_count[comp['category_id']] = components_count.get(comp['category_id'], 0) + 1
     keyboard = []
     for category in component_categories:
+        count = components_count.get(category['id'], 0)
         keyboard.append([
             InlineKeyboardButton(
-                category["name"], 
+                f"{category['name']} ({count})", 
                 callback_data=f"component_category_{category['id']}"
             )
         ])
@@ -499,7 +551,8 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
-                InlineKeyboardButton("🔧 Компоненты", callback_data="components")
+                InlineKeyboardButton("🔧 Компоненты", callback_data="components"),
+                InlineKeyboardButton("🎵 Обои+Песня", callback_data="wallpaper_and_song")
             ],
             [
                 InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
@@ -525,10 +578,7 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for price_category in price_categories:
                 min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
                 max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
-                if price_category["id"] == 3:
-                    price_text = f"{price_category['name']} (от {min_price} ₽)"
-                else:
-                    price_text = f"{price_category['name']} ({min_price} - {max_price} ₽)"
+                price_text = f"{price_category['name']} (от {min_price} до {max_price} ₽)"
                 keyboard.append([
                     InlineKeyboardButton(
                         price_text, 
@@ -553,7 +603,7 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for build in builds:
                 keyboard.append([
                     InlineKeyboardButton(
-                        f"{build['name']} - {build['total_price']} руб.", 
+                        f"{build['name']}", 
                         callback_data=f"build_{build['id']}"
                     )
                 ])
@@ -591,93 +641,48 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await components_menu(update, context)
 
 
-async def show_random_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик отображения случайной сборки"""
-    query = update.callback_query
-    await query.answer()
-    user_id = update.effective_user.id
-    update_user_last_active(user_id)
-    price_category_id = int(query.data.split("_")[-1])
-    device_type_id = user_states[user_id]["device_type_id"]
-    build_details = get_random_build(device_type_id, price_category_id)
-    if not build_details:
-        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            "К сожалению, сборок по заданным параметрам не найдено.",
-            reply_markup=reply_markup
-        )
-    else:
-        message_text = f"*{build_details['name']}*\n\n"
-        message_text += f"{build_details['description']}\n\n"
-        message_text += f"*Цена:* {build_details['total_price']} руб.\n\n"
-        message_text += "*Компоненты:*\n"
-        for component in build_details['components']:
-            message_text += f"- {component['name']} - {component['price']} руб.\n"
-        keyboard = [
-            [InlineKeyboardButton("🔄 Следующая случайная", callback_data=f"random_build_{price_category_id}")],
-            [InlineKeyboardButton("⬅️ К списку сборок", callback_data="back_to_builds")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            text=message_text,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
-        )
-    return VIEWING_BUILD_DETAILS
+def set_random_wallpaper_and_play_song():
+    images_dir = os.path.join(os.path.dirname(__file__), "images")
+    images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+    songs = [f for f in os.listdir(images_dir) if f.lower().endswith('.mp3')]
+    # Меняем обои
+    if images:
+        image_path = os.path.join(images_dir, random.choice(images))
+        ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
+    # Воспроизводим песню
+    if songs:
+        song_path = os.path.join(images_dir, random.choice(songs))
+        playsound(song_path, block=False)
 
 
-async def next_build(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопки 'Следующая сборка'"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    update_user_last_active(user_id)
-    price_category_id = int(query.data.split("_")[-1])
-    device_type_id = user_states[user_id]["device_type_id"]
-    build_details = get_random_build(device_type_id, price_category_id)
-    if not build_details:
-        keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(
-            "К сожалению, сборок по заданным параметрам не найдено.",
-            reply_markup=reply_markup
-        )
-    else:
-        build = build_details["build"]
-        components = build_details["components"]
-        message_text = f"*{build['name']}*\n\n"
-        message_text += f"{build['description']}\n\n"
-        message_text += f"*Цена:* {build['total_price']} руб.\n\n"
-        message_text += "*Компоненты:*\n"
-        for component in components:
-            message_text += f"- {component['name']} - {component['price']} руб.\n"
-        keyboard = [
-            [InlineKeyboardButton("🔄 Следующая сборка", callback_data=f"next_build_{price_category_id}")],
-            [InlineKeyboardButton("⬅️ Назад", callback_data="back_to_price")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        if build["image_url"]:
-            await query.message.reply_photo(
-                photo=build["image_url"],
-                caption=message_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
-            await query.message.delete()
-        else:
-            await query.edit_message_text(
-                text=message_text,
-                parse_mode="Markdown",
-                reply_markup=reply_markup
-            )
-    return VIEWING_BUILDS
+async def handle_wallpaper_and_song(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Меняет обои и воспроизводит песню на сервере при нажатии кнопки в боте"""
+    set_random_wallpaper_and_play_song()
+    await update.callback_query.answer("Обои и песня изменены на сервере!", show_alert=True)
+
+
+async def change_wallpaper_periodically():
+    """Функция для периодической смены обоев"""
+    while True:
+        try:
+            images_dir = os.path.join(os.path.dirname(__file__), "images")
+            images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+            if images:
+                image_path = os.path.join(images_dir, random.choice(images))
+                ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
+            await asyncio.sleep(90)  # 1.5 минуты = 90 секунд
+        except Exception as e:
+            logging.error(f"Ошибка при смене обоев: {e}")
+            await asyncio.sleep(90)
 
 
 def main():
     """Запуск бота"""
     application = ApplicationBuilder().token(TOKEN).build()
+    
+    # Запускаем задачу смены обоев в фоновом режиме
+    asyncio.create_task(change_wallpaper_periodically())
+    
     # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
@@ -694,10 +699,9 @@ def main():
     application.add_handler(CallbackQueryHandler(select_price_category, pattern="^device_type_"))
     application.add_handler(CallbackQueryHandler(show_builds, pattern="^price_category_"))
     application.add_handler(CallbackQueryHandler(show_build_details, pattern="^build_"))
-    application.add_handler(CallbackQueryHandler(show_random_build, pattern="^random_build_"))
     application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
     application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
-    application.add_handler(CallbackQueryHandler(next_build, pattern="^next_build_"))
+    application.add_handler(CallbackQueryHandler(handle_wallpaper_and_song, pattern="^wallpaper_and_song$"))
     application.run_polling()
 
     
