@@ -5,168 +5,160 @@ def add_office_builds():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Сборка 1
+    # Сборка 1 - Acer Gadget E10 ETBox
     build1_components = [
         {
-            "name": "AMD Ryzen 5 3400G OEM",
+            "name": "Intel Core i5-12450H",
             "category_id": 1,  # Процессоры
-            "price": 6399,
-            "price_category_id": 1,  # Бюджетный
-            "description": "Процессор AMD Ryzen 5 3400G OEM [AM4, 4 x 3.7 ГГц, L2 - 2 МБ, L3 - 4 МБ, 2 х DDR4-2933 МГц, AMD Radeon Vega 11, TDP 65 Вт]"
-        },
-        {
-            "name": "ASRock B450M-HDV R4.0",
-            "category_id": 5,  # Материнские платы
-            "price": 5599,
-            "price_category_id": 1,
-            "description": "Материнская плата ASRock B450M-HDV R4.0 [AM4, AMD B450, 2xDDR4-3200 МГц, 1xPCI-Ex16, 1xM.2, Micro-ATX]"
-        },
-        {
-            "name": "Apacer TEX 16 ГБ",
-            "category_id": 3,  # Оперативная память
-            "price": 2199,
-            "price_category_id": 1,
-            "description": "Оперативная память Apacer TEX [AH4U16G32C28YTBAA-1] 16 ГБ [DDR4, 16 ГБx1 шт, 3200 МГц, 16(CL)-20-20-38]"
-        },
-        {
-            "name": "ADATA LEGEND 710 512 ГБ",
-            "category_id": 4,  # Накопители
-            "price": 2799,
-            "price_category_id": 1,
-            "description": "512 ГБ M.2 NVMe накопитель ADATA LEGEND 710 [ALEG-710-512GCS] [PCIe 3.0 x4, чтение - 2400 Мбайт/сек, запись - 1600 Мбайт/сек, NVM Express, TBW - 130 ТБ]"
-        },
-        {
-            "name": "Chieftec EON 400W",
-            "category_id": 6,  # Блоки питания
-            "price": 3299,
-            "price_category_id": 1,
-            "description": "Блок питания Chieftec EON [ZPU-400S] черный [400 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 4 SATA, 6+2 pin PCI-E]"
-        },
-        {
-            "name": "DEXP DC-101B",
-            "category_id": 8,  # Корпуса
-            "price": 2899,
-            "price_category_id": 1,
-            "description": "Корпус DEXP DC-101B черный [Mid-Tower, Micro-ATX, Mini-ITX, Standard-ATX, USB 2.0 Type-A]"
-        },
-        {
-            "name": "ID-COOLING SE-214-XT",
-            "category_id": 7,  # Охлаждение
-            "price": 1199,
-            "price_category_id": 1,
-            "description": "Кулер для процессора ID-COOLING SE-214-XT [LGA1700] [основание - алюминий\\медь, 1500 об/мин, 26.6 дБ, 4 pin, 180 Вт]"
+            "price": 41499,
+            "price_category_id": 2,  # Средний
+            "description": "Процессор Intel Core i5-12450H [4 x 2 ГГц, 16 ГБ DDR5, SSD 512 ГБ, Windows 11 Pro]"
         }
     ]
 
-    # Сборка 2
+    # Сборка 2 - DEXP Atlas H494
     build2_components = [
         {
-            "name": "AMD Ryzen 5 PRO 4655G OEM",
+            "name": "Intel Core i3-12100",
             "category_id": 1,
-            "price": 9299,
-            "price_category_id": 1,
-            "description": "Процессор AMD Ryzen 5 PRO 4655G OEM [AM4, 6 x 3.7 ГГц, L2 - 3 МБ, L3 - 8 МБ, 2 х DDR4-3200 МГц, AMD Radeon Graphics, TDP 65 Вт]"
-        },
-        {
-            "name": "GIGABYTE A520M K V2",
-            "category_id": 5,
-            "price": 4899,
-            "price_category_id": 1,
-            "description": "Материнская плата GIGABYTE A520M K V2 [AM4, AMD A520, 2xDDR4-3200 МГц, 1xPCI-Ex16, 1xM.2, Micro-ATX]"
-        },
-        {
-            "name": "Apacer 16 ГБ",
-            "category_id": 3,
-            "price": 1999,
-            "price_category_id": 1,
-            "description": "Оперативная память Apacer [EL.16G21.GSH] 16 ГБ [DDR4, 16 ГБx1 шт, 3200 МГц, 22(CL)]"
-        },
-        {
-            "name": "AGI AI238 1000 ГБ",
-            "category_id": 4,
-            "price": 5099,
-            "price_category_id": 1,
-            "description": "1000 ГБ 2.5\" SATA накопитель AGI AI238 [AGI1K0GIMAI238] [SATA, чтение - 540 Мбайт/сек, запись - 500 Мбайт/сек, 3D NAND 4 бит QLC]"
-        },
-        {
-            "name": "Cougar STC500 500W",
-            "category_id": 6,
-            "price": 3499,
-            "price_category_id": 1,
-            "description": "Блок питания Cougar STC500 500W [CGR SC-500] черный [500 Вт, 80+, APFC, 20+4 pin, 4+4 pin CPU, 5 SATA, 2 x 6+2 pin PCI-E]"
-        },
-        {
-            "name": "DEXP DCV-280B",
-            "category_id": 8,
-            "price": 2499,
-            "price_category_id": 1,
-            "description": "Корпус DEXP DCV-280B черный [Mini-Tower, Micro-ATX, Mini-ITX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-C]"
-        },
-        {
-            "name": "ID-COOLING SE-214-XT",
-            "category_id": 7,
-            "price": 1199,
-            "price_category_id": 1,
-            "description": "Кулер для процессора ID-COOLING SE-214-XT [LGA1700] [основание - алюминий\\медь, 1500 об/мин, 26.6 дБ, 4 pin, 180 Вт]"
+            "price": 27999,
+            "price_category_id": 1,  # Бюджетный
+            "description": "Процессор Intel Core i3-12100 [4 x 3.3 ГГц, 8 ГБ DDR4, SSD 256 ГБ, без ОС]"
         }
     ]
 
-    # Сборка 3
+    # Сборка 3 - CHUWI UBox
     build3_components = [
         {
-            "name": "AMD Ryzen 5 5500GT OEM",
+            "name": "AMD Ryzen 5 6600H",
             "category_id": 1,
-            "price": 11699,
-            "price_category_id": 1,
-            "description": "Процессор AMD Ryzen 5 5500GT OEM [AM4, 6 x 3.6 ГГц, L2 - 3 МБ, L3 - 16 МБ, 2 х DDR4-3200 МГц, AMD Radeon Vega 7, TDP 65 Вт]"
-        },
+            "price": 39999,
+            "price_category_id": 2,
+            "description": "Процессор AMD Ryzen 5 6600H [6 x 3.3 ГГц, 16 ГБ DDR5, SSD 512 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 4 - DEXP Mini Entry (Intel N100)
+    build4_components = [
         {
-            "name": "GIGABYTE A520M S2H",
-            "category_id": 5,
-            "price": 5199,
+            "name": "Intel N100",
+            "category_id": 1,
+            "price": 19999,
             "price_category_id": 1,
-            "description": "Материнская плата GIGABYTE A520M S2H [AM4, AMD A520, 2xDDR4-3200 МГц, 1xPCI-Ex16, 1xM.2, Micro-ATX]"
-        },
+            "description": "Процессор Intel N100 [8 ГБ DDR4, SSD 256 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 5 - DEXP Mini Entry (Intel N100, 16GB)
+    build5_components = [
         {
-            "name": "ADATA Premier 16 ГБ",
-            "category_id": 3,
-            "price": 2199,
+            "name": "Intel N100",
+            "category_id": 1,
+            "price": 24999,
             "price_category_id": 1,
-            "description": "Оперативная память ADATA Premier [AD4U320016G22-SGN] 16 ГБ [DDR4, 16 ГБx1 шт, 3200 МГц, 22(CL)]"
-        },
+            "description": "Процессор Intel N100 [16 ГБ DDR4, SSD 512 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 6 - DEXP Mini Smart BM002
+    build6_components = [
         {
-            "name": "ARDOR GAMING Ally AL1284 512 ГБ",
-            "category_id": 4,
-            "price": 2899,
-            "price_category_id": 1,
-            "description": "512 ГБ M.2 NVMe накопитель ARDOR GAMING Ally AL1284 [ALMAYM1024-AL1284] [PCIe 3.0 x4, чтение - 3100 Мбайт/сек, запись - 2700 Мбайт/сек, 3 бит TLC, NVM Express, TBW - 375 ТБ]"
-        },
+            "name": "Intel Core i5-1235U",
+            "category_id": 1,
+            "price": 34999,
+            "price_category_id": 2,
+            "description": "Процессор Intel Core i5-1235U [2 x 1.3 ГГц, 16 ГБ DDR4, SSD 512 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 7 - DEXP Aquilon O310
+    build7_components = [
         {
-            "name": "Azerty RPL-400GAR",
-            "category_id": 6,
-            "price": 1999,
+            "name": "Intel Pentium Gold G6405",
+            "category_id": 1,
+            "price": 22999,
             "price_category_id": 1,
-            "description": "Блок питания Azerty RPL-400GAR черный [400 Вт, 20+4 pin, 4+4 pin CPU, 4 SATA, 6+2 pin PCI-E]"
-        },
+            "description": "Процессор Intel Pentium Gold G6405 [2 x 4.1 ГГц, 8 ГБ DDR4, SSD 256 ГБ, без ОС]"
+        }
+    ]
+
+    # Сборка 8 - DEXP Atlas H426
+    build8_components = [
         {
-            "name": "DEXP DCV-200W",
-            "category_id": 8,
-            "price": 1999,
+            "name": "Intel Core i3-12100",
+            "category_id": 1,
+            "price": 29999,
             "price_category_id": 1,
-            "description": "Корпус DEXP DCV-200W белый [Mini-Tower, Micro-ATX, Mini-ITX, USB 2.0 Type-A, USB 3.2 Gen 1 Type-A]"
-        },
+            "description": "Процессор Intel Core i3-12100 [4 x 3.3 ГГц, 8 ГБ DDR4, SSD 512 ГБ, без ОС]"
+        }
+    ]
+
+    # Сборка 9 - DEXP Mini Smart B002
+    build9_components = [
         {
-            "name": "ID-COOLING SE-903-SD V3",
-            "category_id": 7,
-            "price": 799,
+            "name": "AMD Ryzen 7 3750H",
+            "category_id": 1,
+            "price": 37999,
+            "price_category_id": 2,
+            "description": "Процессор AMD Ryzen 7 3750H [4 x 2.3 ГГц, 16 ГБ DDR4, SSD 512 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 10 - DEXP Mars G001
+    build10_components = [
+        {
+            "name": "AMD Ryzen 5 5600G",
+            "category_id": 1,
+            "price": 32999,
+            "price_category_id": 2,
+            "description": "Процессор AMD Ryzen 5 5600G [6 x 3.9 ГГц, 16 ГБ DDR4, SSD 512 ГБ, без ОС]"
+        }
+    ]
+
+    # Сборка 11 - DEXP Atlas H495
+    build11_components = [
+        {
+            "name": "Intel Core i3-12100",
+            "category_id": 1,
+            "price": 28999,
             "price_category_id": 1,
-            "description": "Кулер для процессора ID-COOLING SE-903-SD V3 [основание - алюминий\\медь, 2000 об/мин, 23.1 дБ, 3 pin, 130 Вт]"
+            "description": "Процессор Intel Core i3-12100 [4 x 3.3 ГГц, 8 ГБ DDR4, SSD 256 ГБ, Windows 11 Pro]"
+        }
+    ]
+
+    # Сборка 12 - Inferit Mini INFR0706W
+    build12_components = [
+        {
+            "name": "Intel Celeron J4125",
+            "category_id": 1,
+            "price": 17999,
+            "price_category_id": 1,
+            "description": "Процессор Intel Celeron J4125 [4 x 2 ГГц, 8 ГБ DDR4, SSD 256 ГБ, Windows 10 Pro]"
+        }
+    ]
+
+    # Сборка 13 - DEXP Atlas H465
+    build13_components = [
+        {
+            "name": "Intel Core i3-12100",
+            "category_id": 1,
+            "price": 29999,
+            "price_category_id": 1,
+            "description": "Процессор Intel Core i3-12100 [4 x 3.3 ГГц, 8 ГБ DDR4, SSD 512 ГБ, без ОС]"
         }
     ]
 
     # Добавляем компоненты и получаем их ID
     component_ids = {}
-    for build_components in [build1_components, build2_components, build3_components]:
+    all_builds = [
+        build1_components, build2_components, build3_components,
+        build4_components, build5_components, build6_components,
+        build7_components, build8_components, build9_components,
+        build10_components, build11_components, build12_components,
+        build13_components
+    ]
+    
+    for build_components in all_builds:
         for component in build_components:
             if component["name"] not in component_ids:
                 component_id = add_component(
@@ -181,28 +173,108 @@ def add_office_builds():
     # Добавляем сборки
     builds = [
         {
-            "name": "Офисный ПК на AMD Ryzen 5 3400G",
+            "name": "Мини ПК Acer Gadget E10 ETBox",
             "device_type_id": 2,  # Офисный ПК
-            "price_category_id": 1,  # Бюджетный
-            "description": "Бюджетный офисный ПК на базе процессора AMD Ryzen 5 3400G с интегрированной графикой",
-            "link": "https://www.dns-shop.ru/user-pc/configuration/00c44f32e6c8e1af/",
+            "price_category_id": 2,
+            "description": "Мини ПК на базе Intel Core i5-12450H с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/1bf47191dc70d9cb/mini-pk-acer-gadget-e10-etbox-1746843/",
             "components": [component_ids[comp["name"]] for comp in build1_components]
         },
         {
-            "name": "Офисный ПК на AMD Ryzen 5 PRO 4655G",
+            "name": "ПК DEXP Atlas H494",
             "device_type_id": 2,
             "price_category_id": 1,
-            "description": "Офисный ПК на базе процессора AMD Ryzen 5 PRO 4655G с интегрированной графикой",
-            "link": "https://www.dns-shop.ru/user-pc/configuration/7b6867800b12fc17/",
+            "description": "Офисный ПК на базе Intel Core i3-12100",
+            "link": "https://www.dns-shop.ru/product/fb7372ffa6ecd582/pk-dexp-atlas-h494/",
             "components": [component_ids[comp["name"]] for comp in build2_components]
         },
         {
-            "name": "Офисный ПК на AMD Ryzen 5 5500GT",
+            "name": "Мини ПК CHUWI UBox",
+            "device_type_id": 2,
+            "price_category_id": 2,
+            "description": "Мини ПК на базе AMD Ryzen 5 6600H с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/1032684d843fd582/mini-pk-chuwi-ubox-1746526/",
+            "components": [component_ids[comp["name"]] for comp in build3_components]
+        },
+        {
+            "name": "Мини ПК DEXP Mini Entry (256GB)",
             "device_type_id": 2,
             "price_category_id": 1,
-            "description": "Офисный ПК на базе процессора AMD Ryzen 5 5500GT с интегрированной графикой",
-            "link": "https://www.dns-shop.ru/user-pc/configuration/400039ff5bcb9657/",
-            "components": [component_ids[comp["name"]] for comp in build3_components]
+            "description": "Мини ПК на базе Intel N100 с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/80c17395c6c1eed8/mini-pk-dexp-mini-entry/",
+            "components": [component_ids[comp["name"]] for comp in build4_components]
+        },
+        {
+            "name": "Мини ПК DEXP Mini Entry (512GB)",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Мини ПК на базе Intel N100 с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/e10bde6713a607a3/mini-pk-dexp-mini-entry/",
+            "components": [component_ids[comp["name"]] for comp in build5_components]
+        },
+        {
+            "name": "Мини ПК DEXP Mini Smart BM002",
+            "device_type_id": 2,
+            "price_category_id": 2,
+            "description": "Мини ПК на базе Intel Core i5-1235U с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/e31420e6302a6ae6/mini-pk-dexp-mini-smart-bm002/",
+            "components": [component_ids[comp["name"]] for comp in build6_components]
+        },
+        {
+            "name": "ПК DEXP Aquilon O310",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Офисный ПК на базе Intel Pentium Gold G6405",
+            "link": "https://www.dns-shop.ru/product/9a76eb2a9cb8d9cb/pk-dexp-aquilon-o310/",
+            "components": [component_ids[comp["name"]] for comp in build7_components]
+        },
+        {
+            "name": "ПК DEXP Atlas H426",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Офисный ПК на базе Intel Core i3-12100",
+            "link": "https://www.dns-shop.ru/product/d33d9335988aed20/pk-dexp-atlas-h426/",
+            "components": [component_ids[comp["name"]] for comp in build8_components]
+        },
+        {
+            "name": "Мини ПК DEXP Mini Smart B002",
+            "device_type_id": 2,
+            "price_category_id": 2,
+            "description": "Мини ПК на базе AMD Ryzen 7 3750H с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/b8d806506724ed20/mini-pk-dexp-mini-smart-b002/",
+            "components": [component_ids[comp["name"]] for comp in build9_components]
+        },
+        {
+            "name": "ПК DEXP Mars G001",
+            "device_type_id": 2,
+            "price_category_id": 2,
+            "description": "Офисный ПК на базе AMD Ryzen 5 5600G",
+            "link": "https://www.dns-shop.ru/product/4778a27bc56fed20/pk-dexp-mars-g001/",
+            "components": [component_ids[comp["name"]] for comp in build10_components]
+        },
+        {
+            "name": "ПК DEXP Atlas H495",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Офисный ПК на базе Intel Core i3-12100 с Windows 11 Pro",
+            "link": "https://www.dns-shop.ru/product/5eda0e9aa6eed582/pk-dexp-atlas-h495/",
+            "components": [component_ids[comp["name"]] for comp in build11_components]
+        },
+        {
+            "name": "Мини ПК Inferit Mini INFR0706W",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Мини ПК на базе Intel Celeron J4125 с Windows 10 Pro",
+            "link": "https://www.dns-shop.ru/product/5d2722dfac8bd9cb/mini-pk-inferit-mini-infr0706w/",
+            "components": [component_ids[comp["name"]] for comp in build12_components]
+        },
+        {
+            "name": "ПК DEXP Atlas H465",
+            "device_type_id": 2,
+            "price_category_id": 1,
+            "description": "Офисный ПК на базе Intel Core i3-12100",
+            "link": "https://www.dns-shop.ru/product/7b7437865f64d0a4/pk-dexp-atlas-h465/",
+            "components": [component_ids[comp["name"]] for comp in build13_components]
         }
     ]
 

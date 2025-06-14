@@ -13,9 +13,7 @@ from database import (
 import json
 import ctypes
 import random
-import winreg
 from admin_panel import get_all_builds, get_all_components
-from playsound import playsound
 import asyncio
 
 
@@ -36,25 +34,6 @@ load_dotenv()
 
 
 user_states = {}
-#def set_random_wallpaper_from_images():
-#    images_dir = os.path.join(os.path.dirname(__file__), "images")
-#    images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
-#    if not images:
-#        return
-#    image_path = os.path.join(images_dir, random.choice(images))
-#    ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
-    
-#def rename_recycle_bin(new_name="ркорзина"):
-#    try:
-#        reg_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\CLSID\{645FF040-5081-101B-9F08-00AA002F954E}"
-#        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_path, 0, winreg.KEY_SET_VALUE) as key:
-#            winreg.SetValueEx(key, None, 0, winreg.REG_SZ, new_name)
-#    except Exception as e:
-#        print(f"Ошибка при переименовании корзины: {e}")
-        
-        
-#set_random_wallpaper_from_images()
-#rename_recycle_bin("пенис")
 
 
 logging.basicConfig(
@@ -92,8 +71,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     inline_keyboard = [
         [
             InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
-            InlineKeyboardButton("🔧 Компоненты", callback_data="components"),
-            InlineKeyboardButton("🎵 Обои+Песня", callback_data="wallpaper_and_song")
+            InlineKeyboardButton("🔧 Компоненты", callback_data="components")
         ],
         [
             InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
@@ -248,7 +226,6 @@ async def show_build_details(update: Update, context: ContextTypes.DEFAULT_TYPE)
     components = build_details["components"]
     message_text = f"*{build['name']}*\n\n"
     message_text += f"{build['description']}\n\n"
-    message_text += "*Компоненты:*\n"
     for component in components:
         message_text += f"- {component['name']}\n"
     if build.get('link'):
@@ -310,6 +287,8 @@ async def show_components(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     update_user_last_active(user_id)
     category_id = int(query.data.split("_")[-1])
+    if user_id not in user_states:
+        user_states[user_id] = {}
     user_states[user_id]["component_category_id"] = category_id
     components = get_components_by_category(category_id)
     if not components:
@@ -324,7 +303,7 @@ async def show_components(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for component in components:
             keyboard.append([
                 InlineKeyboardButton(
-                    f"{component['name']} - {component['price']} руб.", 
+                    f"{component['name']}", 
                     callback_data=f"component_{component['id']}"
                 )
             ])
@@ -349,10 +328,29 @@ async def show_component_details(update: Update, context: ContextTypes.DEFAULT_T
         await show_components(update, context)
         return VIEWING_COMPONENTS
     message_text = f"*{component['name']}*\n\n"
-    message_text += f"{component['description']}\n\n"
-    message_text += f"*Цена:* {component['price']} руб.\n\n"
+    # Характеристики
+    specs_text = ""
+    link_from_specs = None
     if component["specs"]:
-        message_text += f"*Характеристики:*\n{component['specs']}\n"
+        specs = component["specs"]
+        if isinstance(specs, dict):
+            # Убираем link из характеристик, если есть
+            specs_items = [(k, v) for k, v in specs.items() if k.lower() != 'link']
+            specs_text = "\n".join([f"- {k}: {v}" for k, v in specs_items])
+            # Если есть link в характеристиках, запоминаем
+            link_from_specs = specs.get('link')
+        else:
+            specs_text = str(specs)
+    if specs_text:
+        message_text += f"*Характеристики:*\n{specs_text}\n\n"
+    # Описание
+    if component["description"]:
+        message_text += f"{component['description']}\n\n"
+    # Ссылка (приоритет: отдельное поле, потом из характеристик)
+    link = component.get('link') or link_from_specs
+    if link:
+        message_text += "ДЛЯ УТОЧНЕНИЯ ЦЕНЫ ПЕРЕЙДИТЕ ПО ССЫЛКЕ:\n"
+        message_text += f"[Открыть компонент в магазине]({link})\n"
     keyboard = [[InlineKeyboardButton("⬅️ Назад к списку", callback_data="back_to_components")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if component["image_url"]:
@@ -380,17 +378,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("⬅️ Назад", callback_data="back_to_main")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            "🔍 *Справка по использованию бота*\n\n"
+            "<b>🔍 Справка по использованию бота</b>\n\n"
             "Этот бот поможет вам выбрать готовую сборку ПК или отдельные компоненты.\n\n"
-            "*Основные команды:*\n"
+            "<b>Основные команды:</b>\n"
             "/start - Запустить бота и открыть главное меню\n"
-            "/help - Показать эту справку\n\n"
-            "*Как пользоваться:*\n"
+            "/help - Показать эту справку\n"
+            "/suggest - Отправить предложение по улучшению бота\n"
+            "/my_suggestions - Показать ваши предложения\n\n"
+            "<b>Как пользоваться:</b>\n"
             "1. В главном меню выберите 'Собрать ПК' или 'Компоненты'\n"
             "2. Следуйте инструкциям на экране для выбора нужных параметров\n"
             "3. Просматривайте доступные сборки или отдельные компоненты\n\n"
             "Если у вас возникли вопросы или проблемы, свяжитесь с администратором.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=reply_markup
         )
     else:
@@ -398,19 +398,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "🔍 *Справка по использованию бота*\n\n"
+            "<b>🔍 Справка по использованию бота</b>\n\n"
             "Этот бот поможет вам выбрать готовую сборку ПК или отдельные компоненты.\n\n"
-            "*Основные команды:*\n"
+            "<b>Основные команды:</b>\n"
             "/start - Запустить бота и открыть главное меню\n"
-            "/help - Показать эту справку\n\n"
+            "/help - Показать эту справку\n"
             "/suggest - Отправить предложение по улучшению бота\n"
             "/my_suggestions - Показать ваши предложения\n\n"
-            "*Как пользоваться:*\n"
+            "<b>Как пользоваться:</b>\n"
             "1. В главном меню выберите 'Собрать ПК' или 'Компоненты'\n"
             "2. Следуйте инструкциям на экране для выбора нужных параметров\n"
             "3. Просматривайте доступные сборки или отдельные компоненты\n\n"
             "Если у вас возникли вопросы или проблемы, свяжитесь с администратором.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=reply_markup
         )
 
@@ -551,8 +551,7 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [
             [
                 InlineKeyboardButton("🖥️ Собрать ПК", callback_data="build_pc"),
-                InlineKeyboardButton("🔧 Компоненты", callback_data="components"),
-                InlineKeyboardButton("🎵 Обои+Песня", callback_data="wallpaper_and_song")
+                InlineKeyboardButton("🔧 Компоненты", callback_data="components")
             ],
             [
                 InlineKeyboardButton("💡 Предложения", callback_data="suggestions"),
@@ -573,18 +572,36 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_id in user_states and "device_type_id" in user_states[user_id]:
             device_type_id = user_states[user_id]["device_type_id"]
             device_types = get_device_types()
+            device_type_name = next((d['name'].lower() for d in device_types if d['id'] == device_type_id), "")
             price_categories = get_price_categories()
             keyboard = []
             for price_category in price_categories:
-                min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
-                max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
-                price_text = f"{price_category['name']} (от {min_price} до {max_price} ₽)"
-                keyboard.append([
-                    InlineKeyboardButton(
-                        price_text, 
-                        callback_data=f"price_category_{price_category['id']}"
-                    )
-                ])
+                if device_type_name.startswith('офис'):
+                    # Для офисного ПК только бюджетный
+                    if price_category['name'].lower().startswith('бюджет'):
+                        max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                        price_text = f"{price_category['name']} (до {max_price} тыс. ₽)"
+                        keyboard.append([
+                            InlineKeyboardButton(
+                                price_text, 
+                                callback_data=f"price_category_{price_category['id']}"
+                            )
+                        ])
+                else:
+                    # Для остальных типов (игровой) — все категории
+                    if price_category['name'].lower().startswith('бюджет'):
+                        max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                        price_text = f"{price_category['name']} (до {max_price} тыс. ₽)"
+                    else:
+                        min_price = "{:,}".format(price_category["min_price"]).replace(",", " ")
+                        max_price = "{:,}".format(price_category["max_price"]).replace(",", " ")
+                        price_text = f"{price_category['name']} (от {min_price} до {max_price} ₽)"
+                    keyboard.append([
+                        InlineKeyboardButton(
+                            price_text, 
+                            callback_data=f"price_category_{price_category['id']}"
+                        )
+                    ])
             keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="back_to_device")])
             reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(
@@ -626,7 +643,7 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for component in components:
                 keyboard.append([
                     InlineKeyboardButton(
-                        f"{component['name']} - {component['price']} руб.", 
+                        f"{component['name']}", 
                         callback_data=f"component_{component['id']}"
                     )
                 ])
@@ -641,47 +658,9 @@ async def back_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await components_menu(update, context)
 
 
-def set_random_wallpaper_and_play_song():
-    images_dir = os.path.join(os.path.dirname(__file__), "images")
-    images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
-    songs = [f for f in os.listdir(images_dir) if f.lower().endswith('.mp3')]
-    # Меняем обои
-    if images:
-        image_path = os.path.join(images_dir, random.choice(images))
-        ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
-    # Воспроизводим песню
-    if songs:
-        song_path = os.path.join(images_dir, random.choice(songs))
-        playsound(song_path, block=False)
-
-
-async def handle_wallpaper_and_song(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Меняет обои и воспроизводит песню на сервере при нажатии кнопки в боте"""
-    set_random_wallpaper_and_play_song()
-    await update.callback_query.answer("Обои и песня изменены на сервере!", show_alert=True)
-
-
-async def change_wallpaper_periodically():
-    """Функция для периодической смены обоев"""
-    while True:
-        try:
-            images_dir = os.path.join(os.path.dirname(__file__), "images")
-            images = [f for f in os.listdir(images_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
-            if images:
-                image_path = os.path.join(images_dir, random.choice(images))
-                ctypes.windll.user32.SystemParametersInfoW(20, 0, image_path, 3)
-            await asyncio.sleep(90)  # 1.5 минуты = 90 секунд
-        except Exception as e:
-            logging.error(f"Ошибка при смене обоев: {e}")
-            await asyncio.sleep(90)
-
-
 def main():
     """Запуск бота"""
     application = ApplicationBuilder().token(TOKEN).build()
-    
-    # Запускаем задачу смены обоев в фоновом режиме
-    asyncio.create_task(change_wallpaper_periodically())
     
     # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", start))
@@ -701,9 +680,10 @@ def main():
     application.add_handler(CallbackQueryHandler(show_build_details, pattern="^build_"))
     application.add_handler(CallbackQueryHandler(show_components, pattern="^component_category_"))
     application.add_handler(CallbackQueryHandler(show_component_details, pattern="^component_"))
-    application.add_handler(CallbackQueryHandler(handle_wallpaper_and_song, pattern="^wallpaper_and_song$"))
+    
+    # Запускаем бота
+    print("Бот запущен...")
     application.run_polling()
 
-    
 if __name__ == "__main__":
     main()
